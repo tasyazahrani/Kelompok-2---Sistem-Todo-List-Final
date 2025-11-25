@@ -727,9 +727,9 @@ export default function TaskManager() {
             <button 
               style={{
                 ...styles.navLink,
-                ...(activeNav === "reports" ? styles.navLinkActive : {})
+                ...(activeNav === "laporan" ? styles.navLinkActive : {})
               }}
-              onClick={() => handleNavigation('/reports', 'reports')}
+              onClick={() => handleNavigation('/laporan', 'laporan')}
             >
               <span style={styles.navIcon}>📊</span> Laporan
             </button>
