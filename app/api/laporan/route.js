@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '@/lib/mongodb'; // Pastikan path ini sesuai dengan struktur foldermu
-import { ObjectId } from 'mongodb';
+import clientPromise from '../../lib/mongodb';
 
 export async function GET(request) {
   try {
-    // 1. Ambil userId dari query parameters URL (contoh: /api/laporan?userId=xxx)
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
+    
+    console.log('📊 Laporan API called for user:', userId);
 
     if (!userId) {
       return NextResponse.json(
-        { error: 'UserId is required' },
+        { success: false, error: 'User ID required' },
         { status: 400 }
       );
     }
@@ -18,80 +18,189 @@ export async function GET(request) {
     const client = await clientPromise;
     const db = client.db('todolist');
     const tasksCollection = db.collection('tasks');
-
-    // 2. Ambil semua tugas berdasarkan userId
-    // Kita mengambil semua untuk dihitung statistiknya di server
-    const tasks = await tasksCollection.find({ userId: userId }).toArray();
-
-    // 3. Hitung Statistik (Logic Backend)
-    const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(task => task.status === 'completed').length;
-    const inProgressTasks = tasks.filter(task => task.status === 'in-progress').length;
     
-    // Hitung 'Pending' (Status pending atau belum ada status)
-    const pendingTasks = tasks.filter(task => !task.status || task.status === 'pending').length;
+    // Ambil semua tasks user
+    const tasks = await tasksCollection.find({ userId }).toArray();
+    
+    console.log(`📋 Found ${tasks.length} tasks for user ${userId}`);
+    
+    // DEBUG: Tampilkan struktur data tasks
+    console.log('🔍 All tasks structure:', tasks.map(task => ({
+      id: task._id,
+      title: task.title,
+      subtasks: task.subtasks,
+      completedSubtasks: task.completedSubtasks,
+      hasSubtasks: !!task.subtasks,
+      subtasksLength: task.subtasks ? task.subtasks.length : 0,
+      completedSubtasksLength: task.completedSubtasks ? task.completedSubtasks.length : 0
+    })));
 
-    // Hitung 'Overdue' (Terlambat)
-    // Logika: Belum selesai DAN deadline ada DAN deadline < waktu sekarang
-    const now = new Date();
-    const overdueTasks = tasks.filter(task => {
-      const isNotDone = task.status !== 'completed';
-      const hasDeadline = task.taskDeadline; // Pastikan field ini sesuai dengan saat save (taskDeadline)
-      
-      if (isNotDone && hasDeadline) {
-        return new Date(task.taskDeadline) < now;
+    // HITUNG STATISTIK UNTUK LAPORAN
+    const totalTasks = tasks.length;
+    
+    // Hitung completed tasks (semua subtasks selesai)
+    const completedTasks = tasks.filter(task => {
+      // Jika task punya subtasks
+      if (task.subtasks && task.subtasks.length > 0) {
+        // Pastikan completedSubtasks ada dan panjangnya sama dengan subtasks
+        if (task.completedSubtasks && task.completedSubtasks.length === task.subtasks.length) {
+          const completedCount = task.completedSubtasks.filter(c => c === true).length;
+          return completedCount === task.subtasks.length;
+        }
       }
       return false;
     }).length;
 
-    // Hitung Persentase Progress
-    const progressPercentage = totalTasks > 0 
-      ? Math.round((completedTasks / totalTasks) * 100) 
-      : 0;
+    // Hitung tasks in progress (beberapa subtasks selesai)
+    const tasksInProgress = tasks.filter(task => {
+      if (task.subtasks && task.subtasks.length > 0 && task.completedSubtasks) {
+        const completedCount = task.completedSubtasks.filter(c => c === true).length;
+        return completedCount > 0 && completedCount < task.subtasks.length;
+      }
+      return false;
+    }).length;
 
-    // 4. Generate "Aktivitas Terbaru"
-    // Karena kita mungkin belum punya tabel 'log_activity' khusus,
-    // kita bisa mengambil 5 tugas yang paling baru di-update/dibuat.
-    const recentActivity = tasks
-      .sort((a, b) => {
-        const dateA = new Date(a.updatedAt || a.createdAt || 0);
-        const dateB = new Date(b.updatedAt || b.createdAt || 0);
-        return dateB - dateA; // Urutkan dari yang terbaru (Descending)
-      })
-      .slice(0, 5) // Ambil 5 teratas
-      .map(task => ({
-        id: task._id,
-        title: task.title || task.taskName, // Sesuaikan dengan nama field di DB
-        status: task.status || 'pending',
-        time: task.updatedAt || task.createdAt,
-        type: task.status === 'completed' ? 'completion' : 'update'
-      }));
+    // Hitung tasks not started
+    const tasksNotStarted = tasks.filter(task => {
+      if (task.subtasks && task.subtasks.length > 0) {
+        if (!task.completedSubtasks || task.completedSubtasks.length === 0) {
+          return true;
+        }
+        const completedCount = task.completedSubtasks.filter(c => c === true).length;
+        return completedCount === 0;
+      }
+      return true;
+    }).length;
 
-    // 5. Kirim Response JSON
-    return NextResponse.json({
-      success: true,
-      data: {
-        stats: {
-          total: totalTasks,
-          completed: completedTasks,
-          inProgress: inProgressTasks,
-          pending: pendingTasks,
-          overdue: overdueTasks,
-          percentage: progressPercentage
-        },
-        recentActivity: recentActivity,
-        // Jika nanti mau nambah logic milestone, bisa taruh sini
-        milestones: {
-          achieved: Math.floor(completedTasks / 5), // Contoh logika dummy: tiap 5 tugas = 1 milestone
-          total: 5
+    // Hitung overdue tasks
+    const now = new Date();
+    const overdueTasks = tasks.filter(task => {
+      if (!task.deadline) return false;
+      
+      // Cek jika task belum completed
+      const isCompleted = task.subtasks && task.completedSubtasks ?
+        task.completedSubtasks.filter(c => c === true).length === task.subtasks.length : false;
+      
+      return !isCompleted && new Date(task.deadline) < now;
+    }).length;
+
+    // Hitung progress keseluruhan
+    const overallProgress = totalTasks > 0 ? 
+      Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    // Hitung milestones (setiap 3 task = 1 milestone)
+    const totalMilestones = Math.max(1, Math.ceil(totalTasks / 3));
+    const completedMilestones = Math.floor(completedTasks / 3);
+    const milestoneProgress = totalMilestones > 0 ? 
+      Math.round((completedMilestones / totalMilestones) * 100) : 0;
+
+    // GENERATE TIMELINE DATA
+    const timeline = tasks.map(task => {
+      let progress = 0;
+      let status = 'not-started';
+      let icon = '📝';
+      
+      if (task.subtasks && task.subtasks.length > 0 && task.completedSubtasks) {
+        const completedCount = task.completedSubtasks.filter(c => c === true).length;
+        progress = Math.round((completedCount / task.subtasks.length) * 100);
+        
+        if (progress === 100) {
+          status = 'completed';
+          icon = '✅';
+        } else if (progress > 0) {
+          status = 'in-progress';
+          icon = '⏳';
         }
       }
-    }, { status: 200 });
+
+      return {
+        id: task._id.toString(),
+        title: task.title || 'Untitled Task',
+        description: task.notes || 'Tidak ada deskripsi',
+        progress: progress,
+        status: status,
+        icon: icon,
+        deadline: task.deadline,
+        priority: task.priority || 'medium'
+      };
+    }).sort((a, b) => {
+      // Urutkan: completed -> in-progress -> not-started
+      const statusOrder = { 'completed': 0, 'in-progress': 1, 'not-started': 2 };
+      return statusOrder[a.status] - statusOrder[b.status];
+    });
+
+    // GENERATE RECENT ACTIVITIES
+    const recentActivities = [];
+    
+    // Activity dari task creation
+    tasks.forEach(task => {
+      if (task.createdAt) {
+        recentActivities.push({
+          id: `${task._id.toString()}-created`,
+          title: `Membuat tugas "${task.title}"`,
+          icon: '📝',
+          time: new Date(task.createdAt).toLocaleDateString('id-ID', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+          })
+        });
+      }
+    });
+
+    // Activity dari completed tasks
+    tasks.forEach(task => {
+      if (task.subtasks && task.subtasks.length > 0 && task.completedSubtasks) {
+        const completedCount = task.completedSubtasks.filter(c => c === true).length;
+        if (completedCount === task.subtasks.length) {
+          recentActivities.push({
+            id: `${task._id.toString()}-completed`,
+            title: `Menyelesaikan "${task.title}"`,
+            icon: '✅',
+            time: new Date().toLocaleDateString('id-ID', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric'
+            })
+          });
+        }
+      }
+    });
+
+    // Urutkan activities dari yang terbaru dan ambil 5 teratas
+    const sortedActivities = recentActivities
+      .sort((a, b) => new Date(b.time) - new Date(a.time))
+      .slice(0, 5);
+
+    // DATA LAPORAN FINAL
+    const reportData = {
+      overallProgress,
+      completedTasks,
+      totalTasks,
+      milestoneProgress,
+      completedMilestones: Math.min(completedMilestones, totalMilestones),
+      totalMilestones,
+      tasksInProgress,
+      tasksNotStarted,
+      overdueTasks,
+      timeline,
+      recentActivities: sortedActivities
+    };
+
+    console.log('📈 FINAL REPORT DATA:', reportData);
+
+    return NextResponse.json({
+      success: true,
+      reportData: reportData
+    });
 
   } catch (error) {
-    console.error('Error fetching report data:', error);
+    console.error('❌ Error in laporan API:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      { 
+        success: false, 
+        error: 'Internal server error'
+      },
       { status: 500 }
     );
   }
