@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [hoverStates, setHoverStates] = useState({});
+  const [activeNav, setActiveNav] = useState("dashboard");
 
   // Fungsi untuk fetch tasks dari database
   const fetchTasksFromDB = async (userId) => {
@@ -167,6 +168,11 @@ export default function Dashboard() {
     }
   };
 
+  const handleNavigation = (path, navItem) => {
+    setActiveNav(navItem);
+    router.push(path);
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
     router.push('/');
@@ -197,12 +203,12 @@ export default function Dashboard() {
   const completedCount = tasks.reduce(
     (sum, t) =>
       sum +
-      t.completedSubtasks.filter((c) => c === true).length /
-        (t.subtasks.length || 1),
+      (t.completedSubtasks ? t.completedSubtasks.filter((c) => c === true).length : 0) /
+        ((t.subtasks && t.subtasks.length) || 1),
     0
   );
 
-  // Styles
+  // Styles - DIPERBAIKI: Hindari konflik background/backgroundColor
   const styles = {
     container: {
       display: 'flex',
@@ -257,14 +263,14 @@ export default function Dashboard() {
       transition: 'all 0.2s',
       fontSize: '14px',
       border: 'none',
-      background: 'none',
+      backgroundColor: 'transparent', // GUNAKAN backgroundColor, BUKAN background
       width: '100%',
       textAlign: 'left',
       cursor: 'pointer',
       fontFamily: 'inherit'
     },
     navLinkActive: {
-      backgroundColor: '#334155',
+      backgroundColor: '#334155', // GUNAKAN backgroundColor
       color: 'white',
       borderRight: '3px solid #3b82f6'
     },
@@ -348,7 +354,7 @@ export default function Dashboard() {
     },
     actionBtn: {
       padding: '12px 20px',
-      backgroundColor: '#3b82f6',
+      backgroundColor: '#3b82f6', // GUNAKAN backgroundColor
       color: 'white',
       border: 'none',
       borderRadius: '8px',
@@ -378,7 +384,7 @@ export default function Dashboard() {
     },
     filterBtn: {
       padding: '8px 16px',
-      backgroundColor: '#f3f4f6',
+      backgroundColor: '#f3f4f6', // GUNAKAN backgroundColor
       border: 'none',
       borderRadius: '6px',
       cursor: 'pointer',
@@ -387,7 +393,7 @@ export default function Dashboard() {
       fontFamily: 'inherit'
     },
     filterBtnActive: {
-      backgroundColor: '#3b82f6',
+      backgroundColor: '#3b82f6', // GUNAKAN backgroundColor
       color: 'white'
     },
     tasksList: {
@@ -399,7 +405,7 @@ export default function Dashboard() {
       border: '1px solid #e5e7eb',
       borderRadius: '8px',
       padding: '16px',
-      backgroundColor: '#fafafa',
+      backgroundColor: '#fafafa', // GUNAKAN backgroundColor
       transition: 'all 0.2s'
     },
     taskHeader: {
@@ -416,7 +422,7 @@ export default function Dashboard() {
     },
     deleteBtn: {
       padding: '4px 8px',
-      backgroundColor: '#ef4444',
+      backgroundColor: '#ef4444', // GUNAKAN backgroundColor
       color: 'white',
       border: 'none',
       borderRadius: '4px',
@@ -494,10 +500,11 @@ export default function Dashboard() {
       justifyContent: 'center',
       cursor: 'pointer',
       fontSize: '10px',
-      flexShrink: 0
+      flexShrink: 0,
+      backgroundColor: 'white' // GUNAKAN backgroundColor
     },
     checkboxChecked: {
-      backgroundColor: '#3b82f6',
+      backgroundColor: '#3b82f6', // GUNAKAN backgroundColor
       borderColor: '#3b82f6',
       color: 'white'
     },
@@ -548,7 +555,7 @@ export default function Dashboard() {
       alignItems: 'center',
       justifyContent: 'center',
       position: 'relative',
-      background: '#e9ecef'
+      backgroundColor: '#e9ecef' // GUNAKAN backgroundColor
     },
     progressPercentage: {
       fontSize: '20px',
@@ -651,7 +658,8 @@ export default function Dashboard() {
       height: '30px',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center'
+      justifyContent: 'center',
+      backgroundColor: 'transparent' // TAMBAHKAN backgroundColor
     },
     formGroup: {
       marginBottom: '16px',
@@ -671,7 +679,8 @@ export default function Dashboard() {
       borderRadius: '6px',
       fontSize: '14px',
       boxSizing: 'border-box',
-      fontFamily: 'inherit'
+      fontFamily: 'inherit',
+      backgroundColor: 'white' // GUNAKAN backgroundColor
     },
     formSelect: {
       width: '100%',
@@ -692,7 +701,8 @@ export default function Dashboard() {
       minHeight: '80px',
       resize: 'vertical',
       boxSizing: 'border-box',
-      fontFamily: 'inherit'
+      fontFamily: 'inherit',
+      backgroundColor: 'white' // GUNAKAN backgroundColor
     },
     submitBtn: {
       width: 'calc(100% - 48px)',
@@ -740,28 +750,56 @@ export default function Dashboard() {
         <ul style={styles.navMenu}>
           <li style={styles.navItem}>
             <button 
-              style={{...styles.navLink, ...styles.navLinkActive}}
+              style={{
+                ...styles.navLink,
+                ...(activeNav === "dashboard" ? styles.navLinkActive : {})
+              }}
+              onClick={() => handleNavigation('/dashboard', 'dashboard')}
             >
               <span style={styles.navIcon}>🏠</span> Dashboard
             </button>
           </li>
           <li style={styles.navItem}>
-            <button style={styles.navLink}>
+            <button 
+              style={{
+                ...styles.navLink,
+                ...(activeNav === "tasks" ? styles.navLinkActive : {})
+              }}
+              onClick={() => handleNavigation('/tasks', 'tasks')}
+            >
               <span style={styles.navIcon}>📝</span> Tugas
             </button>
           </li>
           <li style={styles.navItem}>
-            <button style={styles.navLink}>
+            <button 
+              style={{
+                ...styles.navLink,
+                ...(activeNav === "notifications" ? styles.navLinkActive : {})
+              }}
+              onClick={() => handleNavigation('/notifications', 'notifications')}
+            >
               <span style={styles.navIcon}>⭐</span> Pengingat
             </button>
           </li>
           <li style={styles.navItem}>
-            <button style={styles.navLink}>
+            <button 
+              style={{
+                ...styles.navLink,
+                ...(activeNav === "reports" ? styles.navLinkActive : {})
+              }}
+              onClick={() => handleNavigation('/reports', 'reports')}
+            >
               <span style={styles.navIcon}>📊</span> Laporan
             </button>
           </li>
           <li style={styles.navItem}>
-            <button style={styles.navLink}>
+            <button 
+              style={{
+                ...styles.navLink,
+                ...(activeNav === "settings" ? styles.navLinkActive : {})
+              }}
+              onClick={() => handleNavigation('/settings', 'settings')}
+            >
               <span style={styles.navIcon}>⚙️</span> Pengaturan
             </button>
           </li>
@@ -813,7 +851,7 @@ export default function Dashboard() {
             <button 
               style={{
                 ...styles.actionBtn,
-                backgroundColor: hoverStates.addTask ? '#2563eb' : '#3b82f6'
+                ...(hoverStates.addTask && { backgroundColor: '#2563eb' }) // PERBAIKAN: Gunakan conditional styling yang benar
               }}
               onClick={openModal}
               onMouseEnter={() => handleMouseEnter('addTask')}
@@ -824,7 +862,7 @@ export default function Dashboard() {
             <button 
               style={{
                 ...styles.actionBtn,
-                backgroundColor: hoverStates.todayTasks ? '#2563eb' : '#3b82f6'
+                ...(hoverStates.todayTasks && { backgroundColor: '#2563eb' })
               }}
               onClick={() => setFilter("today")}
               onMouseEnter={() => handleMouseEnter('todayTasks')}
@@ -835,7 +873,7 @@ export default function Dashboard() {
             <button 
               style={{
                 ...styles.actionBtn,
-                backgroundColor: hoverStates.highPriority ? '#2563eb' : '#3b82f6'
+                ...(hoverStates.highPriority && { backgroundColor: '#2563eb' })
               }}
               onClick={() => setFilter("high")}
               onMouseEnter={() => handleMouseEnter('highPriority')}
@@ -846,7 +884,7 @@ export default function Dashboard() {
             <button 
               style={{
                 ...styles.actionBtn,
-                backgroundColor: hoverStates.mediumPriority ? '#2563eb' : '#3b82f6'
+                ...(hoverStates.mediumPriority && { backgroundColor: '#2563eb' })
               }}
               onClick={() => setFilter("medium")}
               onMouseEnter={() => handleMouseEnter('mediumPriority')}
@@ -857,7 +895,7 @@ export default function Dashboard() {
             <button 
               style={{
                 ...styles.actionBtn,
-                backgroundColor: hoverStates.lowPriority ? '#2563eb' : '#3b82f6'
+                ...(hoverStates.lowPriority && { backgroundColor: '#2563eb' })
               }}
               onClick={() => setFilter("low")}
               onMouseEnter={() => handleMouseEnter('lowPriority')}
@@ -929,8 +967,8 @@ export default function Dashboard() {
 
             <div style={styles.tasksList}>
               {filteredTasks.map((task) => {
-                const totalSub = task.subtasks.length;
-                const doneSub = task.completedSubtasks.filter(c => c).length;
+                const totalSub = task.subtasks ? task.subtasks.length : 0;
+                const doneSub = task.completedSubtasks ? task.completedSubtasks.filter(c => c).length : 0;
                 const progress = totalSub ? Math.round((doneSub / totalSub) * 100) : 0;
 
                 const deadlineDate = task.deadline ? new Date(task.deadline) : null;
@@ -987,15 +1025,15 @@ export default function Dashboard() {
                               <div 
                                 style={{
                                   ...styles.checkbox,
-                                  ...(task.completedSubtasks[i] ? styles.checkboxChecked : {})
+                                  ...(task.completedSubtasks && task.completedSubtasks[i] ? styles.checkboxChecked : {})
                                 }}
                                 onClick={() => toggleSubtask(task._id, i)}
                               >
-                                {task.completedSubtasks[i] ? "✔" : ""}
+                                {task.completedSubtasks && task.completedSubtasks[i] ? "✔" : ""}
                               </div>
                               <div style={{
                                 ...styles.subtaskText,
-                                ...(task.completedSubtasks[i] ? styles.subtaskTextCompleted : {})
+                                ...(task.completedSubtasks && task.completedSubtasks[i] ? styles.subtaskTextCompleted : {})
                               }}>
                                 {sub}
                               </div>
