@@ -796,9 +796,9 @@ export default function Dashboard() {
             <button 
               style={{
                 ...styles.navLink,
-                ...(activeNav === "settings" ? styles.navLinkActive : {})
+                ...(activeNav === "pengaturan" ? styles.navLinkActive : {})
               }}
-              onClick={() => handleNavigation('/settings', 'settings')}
+              onClick={() => handleNavigation('/pengaturan', 'pengaturan')}
             >
               <span style={styles.navIcon}>⚙️</span> Pengaturan
             </button>
