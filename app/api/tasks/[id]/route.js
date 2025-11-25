@@ -1,16 +1,24 @@
-// Pastikan PUT method bekerja dengan benar
-export async function PUT(request, { params }) {
+export async function DELETE(request, { params }) {
   try {
     const { id } = params;
-    const updateData = await request.json();
     
-    // Update di database
-    const result = await db.collection('tasks').updateOne(
-      { _id: new ObjectId(id) },
-      { $set: updateData }
+    // Validasi ID
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'Task ID required' },
+        { status: 400 }
+      );
+    }
+
+    const client = await clientPromise;
+    const db = client.db('todolist');
+    
+    // Hapus task dari database
+    const result = await db.collection('tasks').deleteOne(
+      { _id: new ObjectId(id) }
     );
     
-    if (result.modifiedCount === 0) {
+    if (result.deletedCount === 0) {
       return NextResponse.json(
         { success: false, error: 'Task tidak ditemukan' },
         { status: 404 }
@@ -19,9 +27,11 @@ export async function PUT(request, { params }) {
     
     return NextResponse.json({ 
       success: true, 
-      message: 'Task berhasil diupdate' 
+      message: 'Task berhasil dihapus' 
     });
+    
   } catch (error) {
+    console.error('Error deleting task:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

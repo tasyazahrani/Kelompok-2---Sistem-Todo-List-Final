@@ -17,19 +17,31 @@ export default function TaskManager() {
   const [activeNav, setActiveNav] = useState("tasks");
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState([]);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [hoverStates, setHoverStates] = useState({});
   const router = useRouter();
 
   // Fungsi untuk fetch tasks dari database
   const fetchTasksFromDB = async (userId) => {
     try {
+      console.log('🔍 Fetching tasks for user:', userId);
       const response = await fetch(`/api/tasks?userId=${userId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('📦 Tasks API response:', data);
+      
       if (data.success) {
+        console.log('✅ Tasks loaded:', data.tasks.length);
         return data.tasks;
       }
       return [];
     } catch (error) {
-      console.error('Error fetching tasks from DB:', error);
+      console.error('💥 Error fetching tasks:', error);
       return [];
     }
   };
@@ -81,6 +93,18 @@ export default function TaskManager() {
     }
   };
 
+  // Fungsi untuk show notification
+  const showNotification = (message, type = 'info') => {
+    const id = Date.now();
+    const notification = { id, message, type };
+    setNotifications(prev => [...prev, notification]);
+    
+    // Auto remove setelah 3 detik
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 3000);
+  };
+
   useEffect(() => {
     const checkAuthAndLoadTasks = async () => {
       const user = localStorage.getItem('currentUser');
@@ -100,8 +124,23 @@ export default function TaskManager() {
     checkAuthAndLoadTasks();
   }, [router]);
 
+  // Auto-refresh tasks setiap 10 detik
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    const interval = setInterval(async () => {
+      const updatedTasks = await fetchTasksFromDB(currentUser._id);
+      setTasks(updatedTasks);
+    }, 10000);
+    
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
   const openModal = () => setIsModalOpen(true);
-  const closeModal = () => setIsModalOpen(false);
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setFormData({ title: "", priority: "medium", deadline: "", notes: "", subtasks: "" });
+  };
 
   const handleChange = (e) => {
     const { id, value } = e.target;
@@ -114,19 +153,28 @@ export default function TaskManager() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    if (!formData.title.trim()) {
+      showNotification('❌ Judul tugas tidak boleh kosong', 'error');
+      return;
+    }
+
     const subtasks = formData.subtasks ? formData.subtasks.split("\n").filter(st => st.trim()) : [];
     const completedSubtasks = subtasks.map(() => false);
 
     const newTask = {
       userId: currentUser._id,
-      title: formData.title,
+      title: formData.title.trim(),
       priority: formData.priority,
       deadline: formData.deadline || null,
       notes: formData.notes || '',
       subtasks: subtasks,
       completedSubtasks: completedSubtasks,
-      status: "pending"
+      status: "pending",
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
+
+    showNotification(`🔄 Menambahkan tugas "${formData.title}"...`, 'info');
 
     const result = await saveTaskToDB(newTask);
     
@@ -135,8 +183,9 @@ export default function TaskManager() {
       setTasks(updatedTasks);
       setFormData({ title: "", priority: "medium", deadline: "", notes: "", subtasks: "" });
       closeModal();
+      showNotification(`✅ Tugas "${formData.title}" berhasil ditambahkan!`, 'success');
     } else {
-      alert('Gagal menambah tugas: ' + result.error);
+      showNotification(`❌ Gagal menambah tugas: ${result.error}`, 'error');
     }
   };
 
@@ -145,50 +194,125 @@ export default function TaskManager() {
     if (!task) return;
 
     const newStatus = task.status === "completed" ? "pending" : "completed";
+    const action = newStatus === "completed" ? "diselesaikan" : "dibuka kembali";
     
+    // Optimistic update
+    setTasks(prev =>
+      prev.map(t =>
+        t._id === taskId ? { ...t, status: newStatus } : t
+      )
+    );
+
+    showNotification(`🔄 Menandai tugas "${task.title}" sebagai ${action}...`, 'info');
+
     const result = await updateTaskInDB(taskId, {
-      status: newStatus
+      status: newStatus,
+      updatedAt: new Date()
     });
 
     if (result.success) {
-      const updatedTasks = await fetchTasksFromDB(currentUser._id);
-      setTasks(updatedTasks);
+      showNotification(
+        newStatus === "completed" 
+          ? `✅ Tugas "${task.title}" berhasil diselesaikan!` 
+          : `↶ Tugas "${task.title}" dibuka kembali`,
+        'success'
+      );
+    } else {
+      // Rollback jika gagal
+      setTasks(prev =>
+        prev.map(t =>
+          t._id === taskId ? { ...t, status: task.status } : t
+        )
+      );
+      showNotification(`❌ Gagal mengupdate tugas: ${result.error}`, 'error');
     }
   };
 
   const toggleSubtask = async (taskId, subIndex) => {
     const task = tasks.find(t => t._id === taskId);
-    if (!task) return;
+    if (!task || !task.subtasks) return;
+
+    const subtaskName = task.subtasks[subIndex];
+    const currentStatus = task.completedSubtasks[subIndex];
+    const newStatus = !currentStatus;
+    const action = newStatus ? "diselesaikan" : "dibuka kembali";
 
     const updatedCompletedSubtasks = task.completedSubtasks.map((c, i) =>
       i === subIndex ? !c : c
     );
 
+    // Optimistic update
+    setTasks(prev =>
+      prev.map(t =>
+        t._id === taskId
+          ? { ...t, completedSubtasks: updatedCompletedSubtasks }
+          : t
+      )
+    );
+
     const result = await updateTaskInDB(taskId, {
-      completedSubtasks: updatedCompletedSubtasks
+      completedSubtasks: updatedCompletedSubtasks,
+      updatedAt: new Date()
     });
 
     if (result.success) {
+      showNotification(
+        `📌 Subtask "${subtaskName}" ${action}`,
+        'success'
+      );
+      
+      // Cek jika semua subtasks selesai, auto complete task
+      const allCompleted = updatedCompletedSubtasks.every(c => c);
+      if (allCompleted && task.status !== "completed" && task.subtasks.length > 0) {
+        setTimeout(() => {
+          showNotification(`🎉 Semua subtasks selesai! Menandai tugas sebagai selesai...`, 'info');
+          toggleTaskComplete(taskId);
+        }, 1000);
+      }
+    } else {
+      // Rollback jika gagal
       setTasks(prev =>
         prev.map(t =>
           t._id === taskId
-            ? { ...t, completedSubtasks: updatedCompletedSubtasks }
+            ? { ...t, completedSubtasks: task.completedSubtasks }
             : t
         )
       );
+      showNotification(`❌ Gagal mengupdate subtask`, 'error');
     }
   };
 
   const deleteTask = async (taskId) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus tugas ini?')) return;
+    const taskToDelete = tasks.find(t => t._id === taskId);
+    if (!taskToDelete) return;
+
+    // Optimistic update
+    const originalTasks = tasks;
+    setTasks(prev => prev.filter(t => t._id !== taskId));
+    
+    showNotification(`🗑️ Menghapus tugas "${taskToDelete.title}"...`, 'warning');
 
     const result = await deleteTaskFromDB(taskId);
     
     if (result.success) {
-      const updatedTasks = await fetchTasksFromDB(currentUser._id);
-      setTasks(updatedTasks);
+      showNotification(`✅ Tugas "${taskToDelete.title}" berhasil dihapus`, 'success');
     } else {
-      alert('Gagal menghapus tugas: ' + (result.error || 'Unknown error'));
+      // Rollback jika gagal
+      setTasks(originalTasks);
+      showNotification(`❌ Gagal menghapus tugas: ${result.error}`, 'error');
+    }
+    setDeleteConfirm(null);
+  };
+
+  const showDeleteConfirm = (task) => {
+    setDeleteConfirm(task);
+  };
+
+  const handleDeleteConfirm = async (confirmed) => {
+    if (confirmed && deleteConfirm) {
+      await deleteTask(deleteConfirm._id);
+    } else {
+      setDeleteConfirm(null);
     }
   };
 
@@ -225,7 +349,25 @@ export default function TaskManager() {
     router.push('/login');
   };
 
-  // Styles yang disesuaikan dengan Dashboard
+  const handleMouseEnter = (item) => {
+    setHoverStates(prev => ({ ...prev, [item]: true }));
+  };
+
+  const handleMouseLeave = (item) => {
+    setHoverStates(prev => ({ ...prev, [item]: false }));
+  };
+
+  const refreshTasks = async () => {
+    if (!currentUser) return;
+    
+    setLoading(true);
+    const updatedTasks = await fetchTasksFromDB(currentUser._id);
+    setTasks(updatedTasks);
+    setLoading(false);
+    showNotification('🔄 Data tugas diperbarui', 'info');
+  };
+
+  // Styles
   const styles = {
     container: {
       display: 'flex',
@@ -325,9 +467,26 @@ export default function TaskManager() {
       color: '#6b7280',
       margin: 0
     },
+    headerActions: {
+      display: 'flex',
+      gap: '12px',
+      alignItems: 'center'
+    },
     buttonStyle: {
       padding: '12px 24px',
       backgroundColor: '#3b82f6',
+      color: 'white',
+      border: 'none',
+      borderRadius: '8px',
+      cursor: 'pointer',
+      fontWeight: '600',
+      fontSize: '14px',
+      transition: 'all 0.2s',
+      fontFamily: 'inherit'
+    },
+    refreshButton: {
+      padding: '10px 16px',
+      backgroundColor: '#6b7280',
       color: 'white',
       border: 'none',
       borderRadius: '8px',
@@ -659,15 +818,78 @@ export default function TaskManager() {
     }
   };
 
-  const [hoverStates, setHoverStates] = useState({});
-
-  const handleMouseEnter = (item) => {
-    setHoverStates(prev => ({ ...prev, [item]: true }));
+  // Notification Styles
+  const notificationStyles = {
+    notificationContainer: {
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      zIndex: 1001,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px'
+    },
+    notification: {
+      padding: '12px 16px',
+      borderRadius: '8px',
+      color: 'white',
+      fontSize: '14px',
+      fontWeight: '500',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+      minWidth: '300px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      animation: 'slideIn 0.3s ease-out'
+    },
+    notificationSuccess: {
+      backgroundColor: '#10b981',
+      borderLeft: '4px solid #059669'
+    },
+    notificationError: {
+      backgroundColor: '#ef4444',
+      borderLeft: '4px solid #dc2626'
+    },
+    notificationWarning: {
+      backgroundColor: '#f59e0b',
+      borderLeft: '4px solid #d97706'
+    },
+    notificationInfo: {
+      backgroundColor: '#3b82f6',
+      borderLeft: '4px solid #2563eb'
+    }
   };
 
-  const handleMouseLeave = (item) => {
-    setHoverStates(prev => ({ ...prev, [item]: false }));
-  };
+  // Notification Component
+  const Notification = ({ message, type, onClose }) => (
+    <div style={{
+      ...notificationStyles.notification,
+      ...(type === 'success' ? notificationStyles.notificationSuccess :
+          type === 'error' ? notificationStyles.notificationError :
+          type === 'warning' ? notificationStyles.notificationWarning :
+          notificationStyles.notificationInfo)
+    }}>
+      <span style={{ flex: 1 }}>{message}</span>
+      <button 
+        onClick={onClose}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: 'white',
+          cursor: 'pointer',
+          fontSize: '16px',
+          padding: '0',
+          width: '20px',
+          height: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
 
   if (loading) {
     return <div style={styles.loadingContainer}>Memuat tugas...</div>;
@@ -763,47 +985,66 @@ export default function TaskManager() {
           <div style={styles.welcomeText}>
             <h1 style={styles.welcomeTitle}>Task Manager</h1>
             <p style={styles.welcomeSubtitle}>
-              Kelola tugas Anda dengan deadline dan prioritas
+              Kelola {tasks.length} tugas dengan deadline dan prioritas
             </p>
           </div>
-          <button 
-            style={{
-              ...styles.buttonStyle,
-              ...(hoverStates.addTask && { backgroundColor: '#2563eb' })
-            }}
-            onClick={openModal}
-            onMouseEnter={() => handleMouseEnter('addTask')}
-            onMouseLeave={() => handleMouseLeave('addTask')}
-          >
-            ➕ Tambah Tugas
-          </button>
+          <div style={styles.headerActions}>
+            <button 
+              style={{
+                ...styles.refreshButton,
+                ...(hoverStates.refresh && { backgroundColor: '#4b5563' })
+              }}
+              onClick={refreshTasks}
+              onMouseEnter={() => handleMouseEnter('refresh')}
+              onMouseLeave={() => handleMouseLeave('refresh')}
+              title="Refresh data"
+            >
+              🔄 Refresh
+            </button>
+            <button 
+              style={{
+                ...styles.buttonStyle,
+                ...(hoverStates.addTask && { backgroundColor: '#2563eb' })
+              }}
+              onClick={openModal}
+              onMouseEnter={() => handleMouseEnter('addTask')}
+              onMouseLeave={() => handleMouseLeave('addTask')}
+            >
+              ➕ Tambah Tugas
+            </button>
+          </div>
         </div>
 
         <div style={styles.mainContainer}>
           {/* Filter Tabs */}
           <div style={styles.filterTabs}>
-            {["all", "pending", "completed", "overdue"].map((f) => (
+            {[
+              { key: "all", label: "Semua", count: tasks.length },
+              { key: "pending", label: "Aktif", count: tasks.filter(t => t.status === "pending").length },
+              { key: "completed", label: "Selesai", count: tasks.filter(t => t.status === "completed").length },
+              { key: "overdue", label: "Terlambat", count: tasks.filter(t => 
+                t.deadline && new Date(t.deadline) < new Date() && t.status !== "completed"
+              ).length }
+            ].map(({ key, label, count }) => (
               <button
-                key={f}
+                key={key}
                 style={{
                   ...styles.filterTab,
-                  ...(filter === f ? styles.filterTabActive : {})
+                  ...(filter === key ? styles.filterTabActive : {})
                 }}
-                onClick={() => setFilter(f)}
+                onClick={() => setFilter(key)}
                 onMouseEnter={(e) => {
-                  if (filter !== f) {
+                  if (filter !== key) {
                     e.target.style.backgroundColor = '#e5e7eb';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (filter !== f) {
+                  if (filter !== key) {
                     e.target.style.backgroundColor = 'transparent';
                   }
                 }}
               >
-                {f === "all" ? "Semua" : 
-                 f === "pending" ? "Aktif" : 
-                 f === "completed" ? "Selesai" : "Terlambat"}
+                {label} ({count})
               </button>
             ))}
           </div>
@@ -816,9 +1057,35 @@ export default function TaskManager() {
           <div>
             {filteredTasks.length === 0 ? (
               <div style={styles.emptyState}>
-                <div style={styles.emptyStateIcon}>📝</div>
-                <h3 style={styles.emptyStateTitle}>Belum ada tugas</h3>
-                <p style={{ marginBottom: '2rem' }}>Tambahkan tugas pertama Anda untuk memulai!</p>
+                <div style={styles.emptyStateIcon}>
+                  {filter === "completed" ? "🎉" : 
+                   filter === "overdue" ? "⏰" : "📝"}
+                </div>
+                <h3 style={styles.emptyStateTitle}>
+                  {filter === "completed" ? "Belum ada tugas yang selesai" : 
+                   filter === "overdue" ? "Tidak ada tugas terlambat" : 
+                   filter === "pending" ? "Semua tugas sudah selesai" : 
+                   "Belum ada tugas"}
+                </h3>
+                <p style={{ marginBottom: '2rem', color: '#6b7280' }}>
+                  {filter === "all" ? "Tambahkan tugas pertama Anda untuk memulai!" :
+                   filter === "completed" ? "Selesaikan beberapa tugas untuk melihatnya di sini" :
+                   "Semua tugas sudah sesuai filter"}
+                </p>
+                {filter !== "all" && (
+                  <button 
+                    style={{
+                      ...styles.buttonStyle,
+                      marginRight: '12px',
+                      ...(hoverStates.showAll && { backgroundColor: '#2563eb' })
+                    }}
+                    onClick={() => setFilter("all")}
+                    onMouseEnter={() => handleMouseEnter('showAll')}
+                    onMouseLeave={() => handleMouseLeave('showAll')}
+                  >
+                    👀 Lihat Semua Tugas
+                  </button>
+                )}
                 <button 
                   style={{
                     ...styles.buttonStyle,
@@ -828,7 +1095,7 @@ export default function TaskManager() {
                   onMouseEnter={() => handleMouseEnter('emptyStateBtn')}
                   onMouseLeave={() => handleMouseLeave('emptyStateBtn')}
                 >
-                  ➕ Tambah Tugas Pertama
+                  ➕ Tambah Tugas Baru
                 </button>
               </div>
             ) : (
@@ -863,9 +1130,21 @@ export default function TaskManager() {
                           color: task.status === 'completed' ? '#6b7280' : '#1f2937'
                         }}>
                           {task.title}
+                          {task.status === 'completed' && (
+                            <span style={{ 
+                              marginLeft: '8px', 
+                              fontSize: '12px', 
+                              color: '#059669',
+                              fontWeight: '500'
+                            }}>
+                              ✓ Selesai
+                            </span>
+                          )}
                         </h3>
                         {task.notes && (
-                          <p style={{ color: '#6b7280', fontSize: '14px', lineHeight: '1.4', marginTop: '4px' }}>{task.notes}</p>
+                          <p style={{ color: '#6b7280', fontSize: '14px', lineHeight: '1.4', marginTop: '4px' }}>
+                            {task.notes}
+                          </p>
                         )}
                       </div>
                       <span style={{
@@ -880,6 +1159,9 @@ export default function TaskManager() {
                     
                     {task.subtasks && task.subtasks.length > 0 && (
                       <div style={styles.subtaskSection}>
+                        <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>
+                          Sub-tugas ({completedSubtasksCount}/{totalSubtasks})
+                        </div>
                         {task.subtasks.map((st, i) => (
                           <div key={i} style={styles.subtaskItem}>
                             <div 
@@ -903,8 +1185,29 @@ export default function TaskManager() {
                           </div>
                         ))}
                         {totalSubtasks > 0 && (
-                          <div style={{ marginTop: '8px', fontSize: '12px', color: '#6b7280' }}>
-                            Progress: {completedSubtasksCount}/{totalSubtasks} ({progress}%)
+                          <div style={{ 
+                            marginTop: '8px', 
+                            fontSize: '12px', 
+                            color: '#6b7280',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}>
+                            <div style={{
+                              flex: 1,
+                              height: '4px',
+                              backgroundColor: '#e5e7eb',
+                              borderRadius: '2px',
+                              overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                height: '100%',
+                                backgroundColor: progress === 100 ? '#10b981' : '#3b82f6',
+                                width: `${progress}%`,
+                                transition: 'width 0.3s ease'
+                              }} />
+                            </div>
+                            <span>{progress}%</span>
                           </div>
                         )}
                       </div>
@@ -924,6 +1227,9 @@ export default function TaskManager() {
                               hour: '2-digit',
                               minute: '2-digit'
                             })}
+                            {isOverdue(task.deadline) && task.status !== 'completed' && (
+                              <span style={{ marginLeft: '4px', fontWeight: 'bold' }}>TERLAMBAT!</span>
+                            )}
                           </span>
                         )}
                       </div>
@@ -958,7 +1264,7 @@ export default function TaskManager() {
                             color: 'white'
                           })
                         }}
-                        onClick={() => deleteTask(task._id)}
+                        onClick={() => showDeleteConfirm(task)}
                         onMouseEnter={() => handleMouseEnter(`delete-${task._id}`)}
                         onMouseLeave={() => handleMouseLeave(`delete-${task._id}`)}
                         title="Hapus tugas"
@@ -974,7 +1280,7 @@ export default function TaskManager() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Add Task Modal */}
       {isModalOpen && (
         <div style={styles.modal}>
           <div style={styles.modalContent}>
@@ -1086,6 +1392,92 @@ export default function TaskManager() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div style={styles.modal}>
+          <div style={styles.modalContent}>
+            <div style={styles.modalHeader}>
+              <div style={styles.modalTitle}>🗑️ Hapus Tugas</div>
+              <button 
+                style={styles.closeBtn}
+                onClick={() => setDeleteConfirm(null)}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ padding: '24px', textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+              <h3 style={{ marginBottom: '8px', color: '#1f2937' }}>
+                Hapus "{deleteConfirm.title}"?
+              </h3>
+              <p style={{ color: '#6b7280', marginBottom: '24px' }}>
+                Tugas ini akan dihapus permanen dan tidak dapat dikembalikan.
+              </p>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button 
+                  style={{
+                    ...styles.cancelBtn,
+                    flex: 1
+                  }}
+                  onClick={() => handleDeleteConfirm(false)}
+                >
+                  Batal
+                </button>
+                <button 
+                  style={{
+                    ...styles.submitBtn,
+                    flex: 1,
+                    backgroundColor: '#ef4444'
+                  }}
+                  onClick={() => handleDeleteConfirm(true)}
+                >
+                  Ya, Hapus
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Container */}
+      <div style={notificationStyles.notificationContainer}>
+        {notifications.map(notification => (
+          <Notification
+            key={notification.id}
+            message={notification.message}
+            type={notification.type}
+            onClose={() => setNotifications(prev => 
+              prev.filter(n => n.id !== notification.id)
+            )}
+          />
+        ))}
+      </div>
+
+      {/* Global Styles untuk Animation */}
+      <style jsx global>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+        
+        @keyframes slideOut {
+          from {
+            transform: translateX(0);
+            opacity: 1;
+          }
+          to {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+        }
+      `}</style>
     </div>
   );
 }
