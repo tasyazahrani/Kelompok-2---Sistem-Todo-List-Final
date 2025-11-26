@@ -130,6 +130,7 @@ export default function TaskManager() {
     
     const interval = setInterval(async () => {
       const updatedTasks = await fetchTasksFromDB(currentUser._id);
+      // Update tasks secara silent tanpa notifikasi
       setTasks(updatedTasks);
     }, 10000);
     

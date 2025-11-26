@@ -68,7 +68,7 @@ export async function POST(request) {
       notes: notes || '',
       subtasks: subtasks || [],
       completedSubtasks,
-      completed: false,
+      status: 'pending', // UBAH dari 'completed: false' ke 'status: pending'
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -95,7 +95,6 @@ export async function POST(request) {
   }
 }
 
-// Optional: Tambahkan DELETE method untuk multiple deletion
 export async function DELETE(request) {
   try {
     const { ids } = await request.json();
