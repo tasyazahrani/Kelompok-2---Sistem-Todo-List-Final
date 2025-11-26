@@ -24,7 +24,7 @@ export default function Notifikasi() {
 
   // --- 1. SETUP AWAL ---
   useEffect(() => {
-    // Setup Audio Alarm (Online URL)
+    // Setup Audio Alarm
     if (typeof window !== 'undefined') {
         audioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
         audioRef.current.loop = true;
@@ -50,7 +50,6 @@ export default function Notifikasi() {
 
     initPage();
 
-    // Cleanup audio saat pindah halaman
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
@@ -59,19 +58,18 @@ export default function Notifikasi() {
     };
   }, [router]);
 
-  // --- 2. LOGIKA ALARM (Cek Tiap Detik) ---
+  // --- 2. LOGIKA ALARM ---
   useEffect(() => {
     const checkAlarm = setInterval(() => {
       if (!reminders.length) return;
       const now = new Date();
       
       reminders.forEach((rem) => {
-        if (rem.isTriggered) return; // Lewati jika sudah bunyi
+        if (rem.isTriggered) return; 
 
         const remTime = new Date(rem.datetime);
-        const diff = now - remTime; // Selisih waktu sekarang dengan jadwal
+        const diff = now - remTime;
 
-        // Jika waktu sekarang >= jadwal (dan lewatnya belum sampai 1 menit)
         if (diff >= 0 && diff < 60000 && !showAlarmModal) {
             triggerAlarm(rem);
         }
@@ -82,19 +80,14 @@ export default function Notifikasi() {
   }, [reminders, showAlarmModal]);
 
   const triggerAlarm = (reminder) => {
-    // Bunyi
     if (audioRef.current) {
         audioRef.current.play().catch(e => console.log("Audio autoplay blocked", e));
     }
-    // Notifikasi Browser
     if (Notification.permission === "granted") {
         new Notification("⏰ WAKTUNYA TUGAS!", { body: reminder.title });
     }
-    // Tampilkan Modal
     setActiveAlarm(reminder);
     setShowAlarmModal(true);
-
-    // Update state lokal agar tidak bunyi lagi
     setReminders(prev => prev.map(r => r._id === reminder._id ? { ...r, isTriggered: true } : r));
   };
 
@@ -108,18 +101,10 @@ export default function Notifikasi() {
   };
 
   // --- 3. CRUD OPERATION ---
-  
-  // Fetch Data (GET)
   const fetchReminders = async (userId) => {
     try {
-      // INI PATH PENTING: Harus sesuai nama folder di API
       const res = await fetch(`/api/reminders?userId=${userId}`);
-      
-      if (!res.ok) {
-        console.error("API Error:", res.status);
-        return;
-      }
-      
+      if (!res.ok) return;
       const data = await res.json();
       if (data.success) {
         setReminders(data.reminders);
@@ -131,7 +116,6 @@ export default function Notifikasi() {
     }
   };
 
-  // Tambah Data (POST)
   const handleAddReminder = async (e) => {
     e.preventDefault();
     if (!date || !time || !title) return alert("Lengkapi data dulu ya!");
@@ -146,10 +130,9 @@ export default function Notifikasi() {
             body: JSON.stringify({ userId, title, datetime })
         });
         
-        if (!res.ok) throw new Error("Gagal menyimpan (Cek API)");
+        if (!res.ok) throw new Error("Gagal menyimpan");
 
         const data = await res.json();
-        
         if (data.success) {
             setReminders(prev => [...prev, data.reminder].sort((a,b) => new Date(a.datetime) - new Date(b.datetime)));
             setShowReminderModal(false);
@@ -161,7 +144,6 @@ export default function Notifikasi() {
     }
   };
 
-  // Hapus Data (DELETE)
   const deleteReminder = async (id) => {
     if(!confirm("Yakin hapus pengingat ini?")) return;
     try {
@@ -172,7 +154,11 @@ export default function Notifikasi() {
     }
   };
 
-  // Helper Format Tanggal
+  const handleLogout = () => {
+    localStorage.removeItem('currentUser');
+    router.push('/login');
+  };
+
   const formatDateTime = (isoString) => {
     const d = new Date(isoString);
     return {
@@ -181,39 +167,45 @@ export default function Notifikasi() {
     };
   };
 
-  // --- 4. STYLES (UI RAPI) ---
+  // --- STYLES (DISAMAKAN PERSIS DENGAN DASHBOARD) ---
   const styles = {
-    container: { display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: 'system-ui, sans-serif' },
+    container: { display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' },
     
-    // SIDEBAR FIX
-    sidebar: { width: '280px', backgroundColor: '#1e293b', color: 'white', padding: '24px 0', position: 'fixed', height: '100vh', zIndex: 10 },
+    // SIDEBAR 
+    sidebar: { width: '280px', backgroundColor: '#1e293b', color: 'white', padding: '24px 0', position: 'fixed', height: '100vh', zIndex: 10, overflowY: 'auto' },
+    
+    // LOGO SECTION (Diperbaiki agar sama dengan Dashboard)
     logoSection: { 
-        display: 'flex', alignItems: 'center', gap: '15px', // Jarak aman antar elemen
+        display: 'flex', alignItems: 'center', gap: '12px', 
         padding: '0 24px 24px', borderBottom: '1px solid #334155' 
     },
-    logoBox: { 
+    logo: { 
         width: '40px', height: '40px', backgroundColor: '#3b82f6', borderRadius: '8px', 
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 
+        display: 'flex', alignItems: 'center', justifyContent: 'center' 
     },
-    appName: { fontSize: '20px', fontWeight: 'bold', color: 'white', lineHeight: '1' },
-    
+    appName: { fontSize: '20px', fontWeight: 'bold' },
+
     // NAVIGATION
     navMenu: { listStyle: 'none', padding: '24px 0', margin: 0 },
     navItem: { marginBottom: '8px' },
-    navLink: (active) => ({
+    navLink: {
       display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 24px',
-      color: active ? 'white' : '#cbd5e1', textDecoration: 'none', fontSize: '14px', 
-      backgroundColor: active ? '#334155' : 'transparent', width: '100%', textAlign: 'left', 
-      border: 'none', cursor: 'pointer', borderRight: active ? '3px solid #3b82f6' : '3px solid transparent'
-    }),
+      color: '#cbd5e1', textDecoration: 'none', fontSize: '14px', border: 'none',
+      backgroundColor: 'transparent', width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit'
+    },
+    // Style khusus untuk menu yang aktif (Pengingat)
+    navLinkActive: {
+      backgroundColor: '#334155', color: 'white', borderRight: '3px solid #3b82f6'
+    },
+    navIcon: { fontSize: '16px', width: '20px', textAlign: 'center' },
 
     // MAIN CONTENT
-    mainContent: { flex: 1, padding: '32px', marginLeft: '280px', minHeight: '100vh' },
+    mainContent: { flex: 1, padding: '24px', marginLeft: '280px', minHeight: '100vh' },
     header: { display: 'flex', justifyContent: 'space-between', marginBottom: '32px', alignItems: 'center' },
     welcomeTitle: { fontSize: '28px', fontWeight: 'bold', color: '#1f2937', margin: '0 0 4px 0' },
     welcomeSubtitle: { fontSize: '16px', color: '#6b7280', margin: 0 },
     
-    card: { backgroundColor: 'white', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' },
+    card: { backgroundColor: 'white', padding: '24px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' },
     reminderItem: { 
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
         padding: '16px', borderBottom: '1px solid #f1f5f9'
@@ -222,36 +214,63 @@ export default function Notifikasi() {
     btnPrimary: { padding: '12px 24px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '14px' },
     btnDelete: { padding: '6px 12px', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight:'500' },
     
-    // MODAL
     modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(2px)' },
     modalContent: { backgroundColor: 'white', padding: '32px', borderRadius: '16px', width: '400px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' },
     input: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginTop: '8px', boxSizing: 'border-box', fontSize: '14px' },
     label: { fontSize: '14px', fontWeight: '600', color: '#374151' },
     
     alarmModal: { textAlign: 'center', borderTop: '8px solid #ef4444' },
-    stopBtn: { padding: '14px 40px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '50px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '24px' }
+    stopBtn: { padding: '14px 40px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '50px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '24px', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)' }
   };
 
   if (loading) return <div style={{display:'flex', height:'100vh', justifyContent:'center', alignItems:'center', color:'#64748b'}}>Memuat Pengingat...</div>;
 
   return (
     <div style={styles.container}>
-      {/* Sidebar */}
+      {/* Sidebar - DIPERBAIKI */}
       <div style={styles.sidebar}>
         <div style={styles.logoSection}>
-          <div style={styles.logoBox}>
-            <svg viewBox="0 0 24 24" fill="white" width="24" height="24">
-              <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/>
+          <div style={styles.logo}>
+            {/* Menggunakan Icon Checkmark yang sama dengan Dashboard */}
+            <svg viewBox="0 0 24 24" fill="white" width="20" height="20">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
             </svg>
           </div>
           <div style={styles.appName}>TaskFlow</div>
         </div>
+        
         <ul style={styles.navMenu}>
-          <li style={styles.navItem}><Link href="/dashboard" style={styles.navLink(false)}><span>🏠</span> Dashboard</Link></li>
-          <li style={styles.navItem}><Link href="/tasks" style={styles.navLink(false)}><span>📝</span> Tugas</Link></li>
-          <li style={styles.navItem}><button style={styles.navLink(true)}><span>⭐</span> Pengingat</button></li>
-          <li style={styles.navItem}><Link href="/laporan" style={styles.navLink(false)}><span>📊</span> Laporan</Link></li>
-          <li style={styles.navItem}><Link href="/pengaturan" style={styles.navLink(false)}><span>⚙️</span> Pengaturan</Link></li>
+          <li style={styles.navItem}>
+             <Link href="/dashboard" style={styles.navLink}>
+                <span style={styles.navIcon}>🏠</span> Dashboard
+             </Link>
+          </li>
+          <li style={styles.navItem}>
+             <Link href="/tasks" style={styles.navLink}>
+                <span style={styles.navIcon}>📝</span> Tugas
+             </Link>
+          </li>
+          <li style={styles.navItem}>
+             {/* Menu Aktif (Pengingat) */}
+             <button style={{...styles.navLink, ...styles.navLinkActive}}>
+                <span style={styles.navIcon}>⭐</span> Pengingat
+             </button>
+          </li>
+          <li style={styles.navItem}>
+             <Link href="/laporan" style={styles.navLink}>
+                <span style={styles.navIcon}>📊</span> Laporan
+             </Link>
+          </li>
+          <li style={styles.navItem}>
+             <Link href="/pengaturan" style={styles.navLink}>
+                <span style={styles.navIcon}>⚙️</span> Pengaturan
+             </Link>
+          </li>
+          <li style={styles.navItem}>
+             <button onClick={handleLogout} style={styles.navLink}>
+                <span style={styles.navIcon}>🚪</span> Logout
+             </button>
+          </li>
         </ul>
       </div>
 
@@ -260,15 +279,15 @@ export default function Notifikasi() {
         <div style={styles.header}>
             <div>
                 <h1 style={styles.welcomeTitle}>Pengingat</h1>
-                <p style={styles.welcomeSubtitle}>Kelola jadwal alarm tugas Anda</p>
+                <p style={styles.welcomeSubtitle}>Jangan lewatkan jadwal penting Anda</p>
             </div>
             <button style={styles.btnPrimary} onClick={() => setShowReminderModal(true)}>
-                <span>➕</span> Tambah
+                <span>➕</span> Tambah Pengingat
             </button>
         </div>
 
         <div style={styles.card}>
-            <h3 style={{marginBottom: '24px', color: '#334155', fontSize: '18px'}}>📅 Jadwal Akan Datang</h3>
+            <h3 style={{marginBottom: '24px', color: '#334155', fontSize: '18px'}}>📅 Jadwal & Alarm</h3>
             {reminders.length === 0 ? (
                 <div style={{textAlign:'center', padding:'40px 0', color:'#94a3b8'}}>
                     <div style={{fontSize:'40px', marginBottom:'10px'}}>🔕</div>
@@ -289,11 +308,16 @@ export default function Notifikasi() {
                                     <div style={{fontWeight:'bold', fontSize:'18px'}}>{time}</div>
                                 </div>
                                 <div>
-                                    <div style={{fontSize:'16px', fontWeight:'600', color:'#1e293b', marginBottom:'4px'}}>{rem.title}</div>
+                                    <div style={{fontSize:'16px', fontWeight:'600', color:'#1e293b', marginBottom:'4px'}}>
+                                        {rem.isTask ? "📝 " : ""}{rem.title}
+                                    </div>
                                     <div style={{fontSize:'14px', color:'#64748b'}}>{date} {isPast ? '• Sudah Lewat' : ''}</div>
                                 </div>
                             </div>
-                            <button style={styles.btnDelete} onClick={() => deleteReminder(rem._id)}>Hapus</button>
+                            {/* Tombol Hapus hanya muncul jika BUKAN berasal dari tugas otomatis */}
+                            {!rem.isTask && (
+                                <button style={styles.btnDelete} onClick={() => deleteReminder(rem._id)}>Hapus</button>
+                            )}
                         </div>
                     );
                 })
@@ -301,7 +325,7 @@ export default function Notifikasi() {
         </div>
       </div>
 
-      {/* MODAL TAMBAH */}
+      {/* MODAL TAMBAH REMINDER */}
       {showReminderModal && (
         <div style={styles.modalOverlay}>
             <div style={styles.modalContent}>
@@ -309,7 +333,7 @@ export default function Notifikasi() {
                 <form onSubmit={handleAddReminder}>
                     <div style={{marginBottom:'20px'}}>
                         <label style={styles.label}>Judul Kegiatan</label>
-                        <input style={styles.input} value={title} onChange={e => setTitle(e.target.value)} required placeholder="Contoh: Submit Tugas" />
+                        <input style={styles.input} value={title} onChange={e => setTitle(e.target.value)} required placeholder="Contoh: Bangun Pagi" />
                     </div>
                     <div style={{display:'flex', gap:'16px'}}>
                         <div style={{marginBottom:'20px', flex:1}}>
@@ -323,7 +347,7 @@ export default function Notifikasi() {
                     </div>
                     <div style={{display:'flex', gap:'12px', justifyContent:'flex-end', marginTop:'24px'}}>
                         <button type="button" onClick={() => setShowReminderModal(false)} style={{padding:'12px 24px', backgroundColor:'#f1f5f9', border:'none', borderRadius:'8px', cursor:'pointer', color:'#64748b', fontWeight:'600'}}>Batal</button>
-                        <button type="submit" style={styles.btnPrimary}>Simpan</button>
+                        <button type="submit" style={styles.btnPrimary}>Simpan Jadwal</button>
                     </div>
                 </form>
             </div>
