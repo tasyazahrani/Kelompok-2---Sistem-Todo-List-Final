@@ -1,6 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import GlobalAlarm from "../components/GlobalAlarm"; // <--- 1. TAMBAHKAN IMPORT INI
+import GlobalAlarm from "../components/AlarmMonitor"; // <--- 1. TAMBAHKAN IMPORT INI
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

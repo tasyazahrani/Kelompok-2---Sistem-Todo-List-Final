@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -10,31 +10,16 @@ export default function Notifikasi() {
   const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // State Modal & Alarm
+  // State Modal
   const [showReminderModal, setShowReminderModal] = useState(false);
-  const [showAlarmModal, setShowAlarmModal] = useState(false);
-  const [activeAlarm, setActiveAlarm] = useState(null);
 
   // Form State
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
 
-  const audioRef = useRef(null);
-
-  // --- 1. SETUP AWAL ---
+  // --- SETUP AWAL ---
   useEffect(() => {
-    // Setup Audio Alarm
-    if (typeof window !== 'undefined') {
-        audioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
-        audioRef.current.loop = true;
-    }
-
-    // Minta izin notifikasi
-    if ("Notification" in window) {
-      Notification.requestPermission();
-    }
-
     const initPage = async () => {
       const userStr = localStorage.getItem('currentUser');
       if (!userStr) {
@@ -49,58 +34,9 @@ export default function Notifikasi() {
     };
 
     initPage();
-
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
-    };
   }, [router]);
 
-  // --- 2. LOGIKA ALARM ---
-  useEffect(() => {
-    const checkAlarm = setInterval(() => {
-      if (!reminders.length) return;
-      const now = new Date();
-      
-      reminders.forEach((rem) => {
-        if (rem.isTriggered) return; 
-
-        const remTime = new Date(rem.datetime);
-        const diff = now - remTime;
-
-        if (diff >= 0 && diff < 60000 && !showAlarmModal) {
-            triggerAlarm(rem);
-        }
-      });
-    }, 1000);
-
-    return () => clearInterval(checkAlarm);
-  }, [reminders, showAlarmModal]);
-
-  const triggerAlarm = (reminder) => {
-    if (audioRef.current) {
-        audioRef.current.play().catch(e => console.log("Audio autoplay blocked", e));
-    }
-    if (Notification.permission === "granted") {
-        new Notification("⏰ WAKTUNYA TUGAS!", { body: reminder.title });
-    }
-    setActiveAlarm(reminder);
-    setShowAlarmModal(true);
-    setReminders(prev => prev.map(r => r._id === reminder._id ? { ...r, isTriggered: true } : r));
-  };
-
-  const stopAlarm = () => {
-    if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-    }
-    setShowAlarmModal(false);
-    setActiveAlarm(null);
-  };
-
-  // --- 3. CRUD OPERATION ---
+  // --- CRUD OPERATION ---
   const fetchReminders = async (userId) => {
     try {
       const res = await fetch(`/api/reminders?userId=${userId}`);
@@ -149,6 +85,8 @@ export default function Notifikasi() {
     try {
         await fetch(`/api/reminders?id=${id}`, { method: 'DELETE' });
         setReminders(prev => prev.filter(r => r._id !== id));
+        // Hapus juga flag triggered dari localStorage
+        localStorage.removeItem(`alarm_triggered_${id}`);
     } catch (error) {
         alert("Gagal menghapus");
     }
@@ -167,14 +105,14 @@ export default function Notifikasi() {
     };
   };
 
-  // --- STYLES (DISAMAKAN PERSIS DENGAN DASHBOARD) ---
+  // --- STYLES ---
   const styles = {
     container: { display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' },
     
     // SIDEBAR 
     sidebar: { width: '280px', backgroundColor: '#1e293b', color: 'white', padding: '24px 0', position: 'fixed', height: '100vh', zIndex: 10, overflowY: 'auto' },
     
-    // LOGO SECTION (Diperbaiki agar sama dengan Dashboard)
+    // LOGO SECTION
     logoSection: { 
         display: 'flex', alignItems: 'center', gap: '12px', 
         padding: '0 24px 24px', borderBottom: '1px solid #334155' 
@@ -193,7 +131,6 @@ export default function Notifikasi() {
       color: '#cbd5e1', textDecoration: 'none', fontSize: '14px', border: 'none',
       backgroundColor: 'transparent', width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit'
     },
-    // Style khusus untuk menu yang aktif (Pengingat)
     navLinkActive: {
       backgroundColor: '#334155', color: 'white', borderRight: '3px solid #3b82f6'
     },
@@ -217,21 +154,17 @@ export default function Notifikasi() {
     modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(2px)' },
     modalContent: { backgroundColor: 'white', padding: '32px', borderRadius: '16px', width: '400px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' },
     input: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginTop: '8px', boxSizing: 'border-box', fontSize: '14px' },
-    label: { fontSize: '14px', fontWeight: '600', color: '#374151' },
-    
-    alarmModal: { textAlign: 'center', borderTop: '8px solid #ef4444' },
-    stopBtn: { padding: '14px 40px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '50px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '24px', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)' }
+    label: { fontSize: '14px', fontWeight: '600', color: '#374151' }
   };
 
   if (loading) return <div style={{display:'flex', height:'100vh', justifyContent:'center', alignItems:'center', color:'#64748b'}}>Memuat Pengingat...</div>;
 
   return (
     <div style={styles.container}>
-      {/* Sidebar - DIPERBAIKI */}
+      {/* Sidebar */}
       <div style={styles.sidebar}>
         <div style={styles.logoSection}>
           <div style={styles.logo}>
-            {/* Menggunakan Icon Checkmark yang sama dengan Dashboard */}
             <svg viewBox="0 0 24 24" fill="white" width="20" height="20">
               <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
             </svg>
@@ -251,7 +184,6 @@ export default function Notifikasi() {
              </Link>
           </li>
           <li style={styles.navItem}>
-             {/* Menu Aktif (Pengingat) */}
              <button style={{...styles.navLink, ...styles.navLinkActive}}>
                 <span style={styles.navIcon}>⭐</span> Pengingat
              </button>
@@ -297,13 +229,15 @@ export default function Notifikasi() {
                 reminders.map((rem) => {
                     const { date, time } = formatDateTime(rem.datetime);
                     const isPast = new Date(rem.datetime) < new Date();
+                    const isTriggered = localStorage.getItem(`alarm_triggered_${rem._id}`);
+                    
                     return (
-                        <div key={rem._id} style={{...styles.reminderItem, opacity: isPast ? 0.5 : 1}}>
+                        <div key={rem._id} style={{...styles.reminderItem, opacity: isPast || isTriggered ? 0.5 : 1}}>
                             <div style={{display:'flex', alignItems:'center', gap:'20px'}}>
                                 <div style={{
-                                    backgroundColor: isPast ? '#f1f5f9' : '#eff6ff', 
+                                    backgroundColor: isPast || isTriggered ? '#f1f5f9' : '#eff6ff', 
                                     padding: '12px 20px', borderRadius:'12px', textAlign:'center',
-                                    color: isPast ? '#94a3b8' : '#3b82f6', minWidth: '80px'
+                                    color: isPast || isTriggered ? '#94a3b8' : '#3b82f6', minWidth: '80px'
                                 }}>
                                     <div style={{fontWeight:'bold', fontSize:'18px'}}>{time}</div>
                                 </div>
@@ -311,10 +245,13 @@ export default function Notifikasi() {
                                     <div style={{fontSize:'16px', fontWeight:'600', color:'#1e293b', marginBottom:'4px'}}>
                                         {rem.isTask ? "📝 " : ""}{rem.title}
                                     </div>
-                                    <div style={{fontSize:'14px', color:'#64748b'}}>{date} {isPast ? '• Sudah Lewat' : ''}</div>
+                                    <div style={{fontSize:'14px', color:'#64748b'}}>
+                                        {date} 
+                                        {isPast && ' • Sudah Lewat'}
+                                        {isTriggered && !isPast && ' • Alarm Sudah Dibunyikan'}
+                                    </div>
                                 </div>
                             </div>
-                            {/* Tombol Hapus hanya muncul jika BUKAN berasal dari tugas otomatis */}
                             {!rem.isTask && (
                                 <button style={styles.btnDelete} onClick={() => deleteReminder(rem._id)}>Hapus</button>
                             )}
@@ -350,19 +287,6 @@ export default function Notifikasi() {
                         <button type="submit" style={styles.btnPrimary}>Simpan Jadwal</button>
                     </div>
                 </form>
-            </div>
-        </div>
-      )}
-
-      {/* MODAL ALARM */}
-      {showAlarmModal && activeAlarm && (
-        <div style={{...styles.modalOverlay, backgroundColor: 'rgba(0,0,0,0.85)'}}>
-            <div style={{...styles.modalContent, ...styles.alarmModal}}>
-                <div style={{fontSize:'64px', marginBottom:'16px'}}>⏰</div>
-                <h1 style={{color:'#1e293b', margin:'0 0 8px 0'}}>ALARM!</h1>
-                <h2 style={{color: '#ef4444', margin:0, fontSize:'24px'}}>{activeAlarm.title}</h2>
-                <p style={{color:'#64748b', marginTop:'8px'}}>Waktu: {formatDateTime(activeAlarm.datetime).time}</p>
-                <button style={styles.stopBtn} onClick={stopAlarm}>🔕 MATIKAN ALARM</button>
             </div>
         </div>
       )}

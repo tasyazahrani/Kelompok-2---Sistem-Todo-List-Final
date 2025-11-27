@@ -2,81 +2,133 @@
 
 import { useState, useEffect, useRef } from "react";
 
+// KOMPONEN GLOBAL ALARM - Letakkan di layout.js atau _app.js
 export default function GlobalAlarm() {
   const [reminders, setReminders] = useState([]);
+  const [showAlarmModal, setShowAlarmModal] = useState(false);
   const [activeAlarm, setActiveAlarm] = useState(null);
   const audioRef = useRef(null);
+  const checkIntervalRef = useRef(null);
 
-  // 1. Setup Audio & Fetch Data Awal
+  // Setup Audio dan Request Permission
   useEffect(() => {
-    // Setup Audio
     if (typeof window !== 'undefined') {
-      audioRef.current = new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg");
+      audioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
       audioRef.current.loop = true;
     }
 
-    // Request Izin Notifikasi Browser
-    if ("Notification" in window && Notification.permission !== "granted") {
+    if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
 
-    // Fungsi Ambil Data (Gabungan Tugas & Pengingat)
-    const fetchReminders = async () => {
-      const userStr = localStorage.getItem('currentUser');
-      if (!userStr) return;
-      
-      const user = JSON.parse(userStr);
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      if (checkIntervalRef.current) {
+        clearInterval(checkIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Fetch reminders dari ALL users (untuk sistem global)
+  useEffect(() => {
+    const fetchAllReminders = async () => {
       try {
-        // Panggil API yang sudah kita perbaiki sebelumnya
-        const res = await fetch(`/api/reminders?userId=${user._id || user.id}`);
+        // Cek apakah ada user yang login
+        const userStr = localStorage.getItem('currentUser');
+        
+        // JIKA TIDAK ADA USER LOGIN, ambil dari localStorage backup
+        if (!userStr) {
+          const backupReminders = localStorage.getItem('reminders_backup');
+          if (backupReminders) {
+            setReminders(JSON.parse(backupReminders));
+          }
+          return;
+        }
+        
+        const user = JSON.parse(userStr);
+        const userId = user._id || user.id;
+
+        const res = await fetch(`/api/reminders?userId=${userId}`);
+        if (!res.ok) return;
+        
         const data = await res.json();
         if (data.success) {
           setReminders(data.reminders);
+          // Backup reminders ke localStorage agar tetap ada setelah logout
+          localStorage.setItem('reminders_backup', JSON.stringify(data.reminders));
         }
       } catch (error) {
-        console.error("Gagal load alarm background", error);
+        console.error("Gagal fetch reminders:", error);
       }
     };
 
-    // Ambil data pertama kali & update tiap 1 menit
-    fetchReminders();
-    const dataInterval = setInterval(fetchReminders, 60000);
+    fetchAllReminders();
+    
+    // Refresh reminders setiap 30 detik untuk update otomatis
+    const refreshInterval = setInterval(fetchAllReminders, 30000);
 
-    return () => clearInterval(dataInterval);
+    return () => clearInterval(refreshInterval);
   }, []);
 
-  // 2. Cek Waktu Setiap Detik
+  // Logika Alarm - Cek setiap detik
   useEffect(() => {
-    const checkTimer = setInterval(() => {
-      if (!reminders.length) return;
+    checkIntervalRef.current = setInterval(() => {
+      if (!reminders.length || showAlarmModal) return;
       
       const now = new Date();
       
-      reminders.forEach(rem => {
-        if (rem.isTriggered) return; // Skip kalau sudah bunyi
+      for (const rem of reminders) {
+        // Skip jika alarm sudah triggered
+        const triggeredKey = `alarm_triggered_${rem._id}`;
+        if (localStorage.getItem(triggeredKey)) continue;
 
         const remTime = new Date(rem.datetime);
         const diff = now - remTime;
 
-        // Jika waktu sekarang >= jadwal (toleransi telat 1 menit)
-        // DAN belum ada alarm yang sedang aktif
-        if (diff >= 0 && diff < 60000 && !activeAlarm) {
+        // Trigger jika waktunya tepat (dalam range 1 menit)
+        if (diff >= 0 && diff < 60000) {
           triggerAlarm(rem);
+          break; // Hanya trigger 1 alarm pada satu waktu
         }
-      });
+      }
     }, 1000);
 
-    return () => clearInterval(checkTimer);
-  }, [reminders, activeAlarm]);
+    return () => {
+      if (checkIntervalRef.current) {
+        clearInterval(checkIntervalRef.current);
+      }
+    };
+  }, [reminders, showAlarmModal]);
 
   const triggerAlarm = (reminder) => {
+    // Tandai alarm ini sudah triggered SEBELUM menampilkan modal
+    const triggeredKey = `alarm_triggered_${reminder._id}`;
+    localStorage.setItem(triggeredKey, Date.now().toString());
+
+    // Update state reminders agar alarm ini ditandai
+    setReminders(prev => prev.map(r => 
+      r._id === reminder._id ? { ...r, isTriggered: true } : r
+    ));
+
+    // Play audio
     if (audioRef.current) {
-      audioRef.current.play().catch(e => console.log("Audio blocked by browser", e));
+      audioRef.current.play().catch(e => console.log("Audio autoplay blocked", e));
     }
+
+    // Show browser notification
     if (Notification.permission === "granted") {
-      new Notification("⏰ WAKTUNYA TUGAS!", { body: reminder.title });
+      new Notification("⏰ WAKTUNYA TUGAS!", { 
+        body: reminder.title,
+        icon: "https://cdn-icons-png.flaticon.com/512/3502/3502601.png",
+        requireInteraction: true // Notification tidak hilang otomatis
+      });
     }
+
     setActiveAlarm(reminder);
+    setShowAlarmModal(true);
   };
 
   const stopAlarm = () => {
@@ -84,55 +136,106 @@ export default function GlobalAlarm() {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
-    // Update state lokal supaya tidak bunyi lagi
-    setReminders(prev => prev.map(r => r._id === activeAlarm._id ? {...r, isTriggered: true} : r));
+    setShowAlarmModal(false);
     setActiveAlarm(null);
   };
 
-  // Kalau tidak ada alarm, komponen ini "Invisible"
-  if (!activeAlarm) return null;
+  const formatDateTime = (isoString) => {
+    const d = new Date(isoString);
+    return {
+      date: d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' }),
+      time: d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+    };
+  };
 
-  // Tampilan Layar Merah saat Alarm Bunyi
+  const styles = {
+    modalOverlay: { 
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+      backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, 
+      display: 'flex', justifyContent: 'center', alignItems: 'center', 
+      backdropFilter: 'blur(4px)',
+      animation: 'fadeIn 0.3s ease-in'
+    },
+    modalContent: { 
+      backgroundColor: 'white', padding: '40px', borderRadius: '20px', 
+      width: '450px', maxWidth: '90%', 
+      boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+      textAlign: 'center', borderTop: '8px solid #ef4444',
+      animation: 'slideUp 0.3s ease-out'
+    },
+    alarmIcon: { 
+      fontSize: '80px', marginBottom: '20px',
+      animation: 'shake 0.5s infinite'
+    },
+    title: { 
+      color: '#1e293b', margin: '0 0 12px 0', 
+      fontSize: '28px', fontWeight: 'bold'
+    },
+    subtitle: { 
+      color: '#ef4444', margin: 0, fontSize: '24px', 
+      fontWeight: '600', marginBottom: '8px'
+    },
+    time: { 
+      color: '#64748b', marginTop: '12px', fontSize: '16px'
+    },
+    stopBtn: { 
+      padding: '16px 48px', backgroundColor: '#ef4444', 
+      color: 'white', border: 'none', borderRadius: '50px', 
+      fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', 
+      marginTop: '32px', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)',
+      transition: 'all 0.2s',
+      fontFamily: 'inherit'
+    }
+  };
+
+  // Jangan render apa-apa jika tidak ada alarm aktif
+  if (!showAlarmModal || !activeAlarm) return null;
+
   return (
-    <div style={styles.overlay}>
-      <div style={styles.modal}>
-        <div style={{fontSize: '80px', animation: 'shake 0.5s infinite'}}>⏰</div>
-        <h1 style={{color: '#fff', margin: '20px 0'}}>ALARM TUGAS!</h1>
-        <h2 style={{color: '#fee2e2', background: 'rgba(0,0,0,0.3)', padding: '10px 20px', borderRadius: '10px'}}>
-          {activeAlarm.title}
-        </h2>
-        <button onClick={stopAlarm} style={styles.button}>
-          🔕 MATIKAN SAYA
-        </button>
-      </div>
-      {/* Animasi getar */}
-      <style jsx>{`
+    <>
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideUp {
+          from { transform: translateY(50px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
         @keyframes shake {
-          0% { transform: rotate(0deg); }
-          25% { transform: rotate(10deg); }
-          50% { transform: rotate(0deg); }
-          75% { transform: rotate(-10deg); }
-          100% { transform: rotate(0deg); }
+          0%, 100% { transform: rotate(0deg); }
+          25% { transform: rotate(-10deg); }
+          75% { transform: rotate(10deg); }
         }
       `}</style>
-    </div>
+
+      <div style={styles.modalOverlay}>
+        <div style={styles.modalContent}>
+          <div style={styles.alarmIcon}>⏰</div>
+          <h1 style={styles.title}>ALARM BERBUNYI!</h1>
+          <h2 style={styles.subtitle}>{activeAlarm.title}</h2>
+          <p style={styles.time}>
+            🕐 {formatDateTime(activeAlarm.datetime).time}
+          </p>
+          <p style={{...styles.time, marginTop: '8px'}}>
+            📅 {formatDateTime(activeAlarm.datetime).date}
+          </p>
+          <button 
+            style={styles.stopBtn} 
+            onClick={stopAlarm}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#dc2626';
+              e.target.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#ef4444';
+              e.target.style.transform = 'scale(1)';
+            }}
+          >
+            🔕 MATIKAN ALARM
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
-
-const styles = {
-  overlay: {
-    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(220, 38, 38, 0.95)', // Layar Merah Full
-    zIndex: 9999, // Paling depan di atas segalanya
-    display: 'flex', justifyContent: 'center', alignItems: 'center'
-  },
-  modal: {
-    textAlign: 'center', color: 'white', fontFamily: 'system-ui, sans-serif'
-  },
-  button: {
-    marginTop: '30px', padding: '15px 50px', fontSize: '20px', fontWeight: 'bold',
-    color: '#dc2626', backgroundColor: 'white', border: 'none', borderRadius: '50px',
-    cursor: 'pointer', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-    transition: 'transform 0.1s'
-  }
-};
