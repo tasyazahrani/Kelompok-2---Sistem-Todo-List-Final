@@ -1,7 +1,8 @@
 // tes-grafana.js
 // GANTI DENGAN DATA ASLI DARI .ENV.LOCAL KAMU
 const USER = '1423284'; // Isi LOKI_USER
-const PASS = '...'; // Isi LOKI_PASSWORD (token panjang)
+require('dotenv').config();
+const PASS = process.env.GRAFANA_TOKEN;
 const HOST = 'https://logs-prod-032.grafana.net'; // Isi LOKI_HOST
 
 const auth = Buffer.from(`${USER}:${PASS}`).toString('base64');
