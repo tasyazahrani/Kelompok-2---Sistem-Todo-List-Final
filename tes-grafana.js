@@ -5,6 +5,10 @@ require('dotenv').config();
 const PASS = process.env.GRAFANA_TOKEN;
 const HOST = 'https://logs-prod-032.grafana.net'; // Isi LOKI_HOST
 
+console.log("DEBUG CHECK:");
+console.log("User ID:", USER);
+console.log("Token terbaca:", PASS ? "ADA (Panjang: " + PASS.length + ")" : "KOSONG/UNDEFINED");
+
 const auth = Buffer.from(`${USER}:${PASS}`).toString('base64');
 
 async function kirimLog() {
