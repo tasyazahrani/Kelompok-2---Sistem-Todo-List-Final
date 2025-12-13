@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [hoverStates, setHoverStates] = useState({});
   const [activeNav, setActiveNav] = useState("dashboard");
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   // Fungsi untuk fetch tasks dari database
   const fetchTasksFromDB = async (userId) => {
@@ -94,6 +95,17 @@ export default function Dashboard() {
 
     checkAuthAndLoadTasks();
   }, [router]);
+
+  // Fungsi untuk navigasi kalender
+  const navigateCalendar = (direction) => {
+    const newDate = new Date(currentMonth);
+    newDate.setMonth(newDate.getMonth() + direction);
+    setCurrentMonth(newDate);
+  };
+
+  const goToToday = () => {
+    setCurrentMonth(new Date());
+  };
 
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);
@@ -208,7 +220,43 @@ export default function Dashboard() {
     0
   );
 
-  // Styles - DIPERBAIKI: Hindari konflik background/backgroundColor
+  // Fungsi untuk mendapatkan hari dalam bulan
+  const getDaysInMonth = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDay = firstDay.getDay(); // 0 = Minggu
+    
+    const days = [];
+    
+    // Tambahkan hari kosong untuk awal bulan
+    for (let i = 0; i < startingDay; i++) {
+      days.push(null);
+    }
+    
+    // Tambahkan hari-hari dalam bulan
+    for (let i = 1; i <= daysInMonth; i++) {
+      const date = new Date(year, month, i);
+      days.push(date);
+    }
+    
+    return days;
+  };
+
+  // Fungsi untuk mendapatkan tugas pada tanggal tertentu
+  const getTasksForDate = (date) => {
+    if (!date) return [];
+    
+    return tasks.filter(task => {
+      if (!task.deadline) return false;
+      const taskDate = new Date(task.deadline);
+      return taskDate.toDateString() === date.toDateString();
+    });
+  };
+
+  // Styles - dengan layout baru
   const styles = {
     container: {
       display: 'flex',
@@ -263,14 +311,14 @@ export default function Dashboard() {
       transition: 'all 0.2s',
       fontSize: '14px',
       border: 'none',
-      backgroundColor: 'transparent', // GUNAKAN backgroundColor, BUKAN background
+      backgroundColor: 'transparent',
       width: '100%',
       textAlign: 'left',
       cursor: 'pointer',
       fontFamily: 'inherit'
     },
     navLinkActive: {
-      backgroundColor: '#334155', // GUNAKAN backgroundColor
+      backgroundColor: '#334155',
       color: 'white',
       borderRight: '3px solid #3b82f6'
     },
@@ -331,44 +379,100 @@ export default function Dashboard() {
       fontSize: '14px',
       color: '#6b7280'
     },
-    quickActions: {
+    mainDashboard: {
+      display: 'grid',
+      gridTemplateColumns: '2fr 1fr',
+      gap: '24px',
+      marginBottom: '24px'
+    },
+    leftColumn: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '24px'
+    },
+    rightColumn: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '24px'
+    },
+    calendarCard: {
       backgroundColor: 'white',
       padding: '24px',
       borderRadius: '12px',
       boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-      marginBottom: '24px'
+      height: 'fit-content'
     },
-    sectionTitle: {
-      fontSize: '20px',
-      fontWeight: 'bold',
-      color: '#1f2937',
-      margin: '0 0 16px 0',
+    calendarHeader: {
       display: 'flex',
+      justifyContent: 'space-between',
       alignItems: 'center',
-      gap: '8px'
+      marginBottom: '20px'
     },
-    actionButtons: {
-      display: 'flex',
-      gap: '12px',
-      flexWrap: 'wrap'
+    monthTitle: {
+      fontSize: '18px',
+      fontWeight: 'bold',
+      color: '#1f2937'
     },
-    actionBtn: {
-      padding: '12px 20px',
-      backgroundColor: '#3b82f6', // GUNAKAN backgroundColor
-      color: 'white',
+    calendarNavBtn: {
+      padding: '6px 10px',
+      backgroundColor: '#f3f4f6',
       border: 'none',
-      borderRadius: '8px',
+      borderRadius: '6px',
       cursor: 'pointer',
       fontSize: '14px',
-      fontWeight: '500',
       transition: 'all 0.2s',
       fontFamily: 'inherit'
     },
-    tasksSection: {
+    calendarGrid: {
       display: 'grid',
-      gridTemplateColumns: '2fr 1fr',
-      gap: '24px',
-      alignItems: 'start'
+      gridTemplateColumns: 'repeat(7, 1fr)',
+      gap: '8px'
+    },
+    dayHeader: {
+      textAlign: 'center',
+      padding: '8px',
+      fontWeight: '600',
+      color: '#374151',
+      fontSize: '12px',
+      textTransform: 'uppercase'
+    },
+    dayCell: {
+      textAlign: 'center',
+      padding: '8px 4px',
+      fontSize: '14px',
+      color: '#374151',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+      position: 'relative',
+      minHeight: '40px',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'flex-start'
+    },
+    dayCellEmpty: {
+      visibility: 'hidden'
+    },
+    dayNumber: {
+      width: '28px',
+      height: '28px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: '50%',
+      marginBottom: '4px'
+    },
+    dayNumberToday: {
+      backgroundColor: '#3b82f6',
+      color: 'white'
+    },
+    taskIndicator: {
+      width: '6px',
+      height: '6px',
+      backgroundColor: '#3b82f6',
+      borderRadius: '50%',
+      marginTop: '2px'
     },
     tasksContainer: {
       backgroundColor: 'white',
@@ -384,7 +488,7 @@ export default function Dashboard() {
     },
     filterBtn: {
       padding: '8px 16px',
-      backgroundColor: '#f3f4f6', // GUNAKAN backgroundColor
+      backgroundColor: '#f3f4f6',
       border: 'none',
       borderRadius: '6px',
       cursor: 'pointer',
@@ -393,7 +497,7 @@ export default function Dashboard() {
       fontFamily: 'inherit'
     },
     filterBtnActive: {
-      backgroundColor: '#3b82f6', // GUNAKAN backgroundColor
+      backgroundColor: '#3b82f6',
       color: 'white'
     },
     tasksList: {
@@ -405,7 +509,7 @@ export default function Dashboard() {
       border: '1px solid #e5e7eb',
       borderRadius: '8px',
       padding: '16px',
-      backgroundColor: '#fafafa', // GUNAKAN backgroundColor
+      backgroundColor: '#fafafa',
       transition: 'all 0.2s'
     },
     taskHeader: {
@@ -422,7 +526,7 @@ export default function Dashboard() {
     },
     deleteBtn: {
       padding: '4px 8px',
-      backgroundColor: '#ef4444', // GUNAKAN backgroundColor
+      backgroundColor: '#ef4444',
       color: 'white',
       border: 'none',
       borderRadius: '4px',
@@ -501,10 +605,10 @@ export default function Dashboard() {
       cursor: 'pointer',
       fontSize: '10px',
       flexShrink: 0,
-      backgroundColor: 'white' // GUNAKAN backgroundColor
+      backgroundColor: 'white'
     },
     checkboxChecked: {
-      backgroundColor: '#3b82f6', // GUNAKAN backgroundColor
+      backgroundColor: '#3b82f6',
       borderColor: '#3b82f6',
       color: 'white'
     },
@@ -537,9 +641,7 @@ export default function Dashboard() {
       padding: '24px',
       borderRadius: '12px',
       boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-      height: 'fit-content',
-      position: 'sticky',
-      top: '24px'
+      marginTop: '24px'
     },
     progressOverview: {
       display: 'flex',
@@ -555,7 +657,7 @@ export default function Dashboard() {
       alignItems: 'center',
       justifyContent: 'center',
       position: 'relative',
-      backgroundColor: '#e9ecef' // GUNAKAN backgroundColor
+      backgroundColor: '#e9ecef'
     },
     progressPercentage: {
       fontSize: '20px',
@@ -659,7 +761,7 @@ export default function Dashboard() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'transparent' // TAMBAHKAN backgroundColor
+      backgroundColor: 'transparent'
     },
     formGroup: {
       marginBottom: '16px',
@@ -680,7 +782,7 @@ export default function Dashboard() {
       fontSize: '14px',
       boxSizing: 'border-box',
       fontFamily: 'inherit',
-      backgroundColor: 'white' // GUNAKAN backgroundColor
+      backgroundColor: 'white'
     },
     formSelect: {
       width: '100%',
@@ -702,7 +804,7 @@ export default function Dashboard() {
       resize: 'vertical',
       boxSizing: 'border-box',
       fontFamily: 'inherit',
-      backgroundColor: 'white' // GUNAKAN backgroundColor
+      backgroundColor: 'white'
     },
     submitBtn: {
       width: 'calc(100% - 48px)',
@@ -734,6 +836,86 @@ export default function Dashboard() {
   if (!currentUser) {
     return <div style={styles.loadingContainer}>Redirecting to login...</div>;
   }
+
+  // Render calendar
+  const renderCalendar = () => {
+    const daysOfWeek = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+    const days = getDaysInMonth();
+    const today = new Date();
+    
+    return (
+      <>
+        <div style={styles.calendarHeader}>
+          <div style={styles.monthTitle}>
+            {currentMonth.toLocaleDateString('id-ID', { 
+              month: 'long', 
+              year: 'numeric' 
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button 
+              style={styles.calendarNavBtn}
+              onClick={() => navigateCalendar(-1)}
+            >
+              &lt;
+            </button>
+            <button 
+              style={styles.calendarNavBtn}
+              onClick={goToToday}
+            >
+              Hari Ini
+            </button>
+            <button 
+              style={styles.calendarNavBtn}
+              onClick={() => navigateCalendar(1)}
+            >
+              &gt;
+            </button>
+          </div>
+        </div>
+        
+        <div style={styles.calendarGrid}>
+          {/* Day headers */}
+          {daysOfWeek.map(day => (
+            <div key={day} style={styles.dayHeader}>
+              {day}
+            </div>
+          ))}
+          
+          {/* Day cells */}
+          {days.map((date, index) => {
+            if (!date) {
+              return <div key={`empty-${index}`} style={{ ...styles.dayCell, ...styles.dayCellEmpty }}></div>;
+            }
+            
+            const isToday = date.toDateString() === today.toDateString();
+            const hasTasks = getTasksForDate(date).length > 0;
+            
+            return (
+              <div 
+                key={date.toISOString()} 
+                style={styles.dayCell}
+                onClick={() => {
+                  const tasksForDate = getTasksForDate(date);
+                  if (tasksForDate.length > 0) {
+                    alert(`Tugas pada ${date.toLocaleDateString('id-ID')}:\n\n${tasksForDate.map(t => `• ${t.title} (${t.priority})`).join('\n')}`);
+                  }
+                }}
+              >
+                <div style={{
+                  ...styles.dayNumber,
+                  ...(isToday ? styles.dayNumberToday : {})
+                }}>
+                  {date.getDate()}
+                </div>
+                {hasTasks && <div style={styles.taskIndicator}></div>}
+              </div>
+            );
+          })}
+        </div>
+      </>
+    );
+  };
 
   return (
     <div style={styles.container}>
@@ -842,336 +1024,227 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div style={styles.quickActions}>
-          <h2 style={styles.sectionTitle}>
-            <span>⚡</span> Aksi Cepat
-          </h2>
-          <div style={styles.actionButtons}>
-            <button 
-              style={{
-                ...styles.actionBtn,
-                ...(hoverStates.addTask && { backgroundColor: '#2563eb' }) // PERBAIKAN: Gunakan conditional styling yang benar
-              }}
-              onClick={openModal}
-              onMouseEnter={() => handleMouseEnter('addTask')}
-              onMouseLeave={() => handleMouseLeave('addTask')}
-            >
-              ➕ Tambah Tugas Baru
-            </button>
-            <button 
-              style={{
-                ...styles.actionBtn,
-                ...(hoverStates.todayTasks && { backgroundColor: '#2563eb' })
-              }}
-              onClick={() => setFilter("today")}
-              onMouseEnter={() => handleMouseEnter('todayTasks')}
-              onMouseLeave={() => handleMouseLeave('todayTasks')}
-            >
-              📅 Tugas Hari Ini
-            </button>
-            <button 
-              style={{
-                ...styles.actionBtn,
-                ...(hoverStates.highPriority && { backgroundColor: '#2563eb' })
-              }}
-              onClick={() => setFilter("high")}
-              onMouseEnter={() => handleMouseEnter('highPriority')}
-              onMouseLeave={() => handleMouseLeave('highPriority')}
-            >
-              🔥 Prioritas Tinggi
-            </button>
-            <button 
-              style={{
-                ...styles.actionBtn,
-                ...(hoverStates.mediumPriority && { backgroundColor: '#2563eb' })
-              }}
-              onClick={() => setFilter("medium")}
-              onMouseEnter={() => handleMouseEnter('mediumPriority')}
-              onMouseLeave={() => handleMouseLeave('mediumPriority')}
-            >
-              ⚡ Prioritas Sedang
-            </button>
-            <button 
-              style={{
-                ...styles.actionBtn,
-                ...(hoverStates.lowPriority && { backgroundColor: '#2563eb' })
-              }}
-              onClick={() => setFilter("low")}
-              onMouseEnter={() => handleMouseEnter('lowPriority')}
-              onMouseLeave={() => handleMouseLeave('lowPriority')}
-            >
-              💤 Prioritas Rendah
-            </button>
+        {/* Main Dashboard Layout */}
+        <div style={styles.mainDashboard}>
+          {/* Left Column */}
+          <div style={styles.leftColumn}>
+            {/* Tasks Container */}
+            <div style={styles.tasksContainer}>
+              <h2 style={styles.sectionTitle}>
+                <span>📋</span> Daftar Tugas
+              </h2>
+              <div style={styles.taskFilters}>
+                <button 
+                  style={{
+                    ...styles.filterBtn,
+                    ...(filter === "all" ? styles.filterBtnActive : {})
+                  }}
+                  onClick={() => setFilter("all")}
+                >
+                  📁 Semua ({tasks.length})
+                </button>
+                <button 
+                  style={{
+                    ...styles.filterBtn,
+                    ...(filter === "high" ? styles.filterBtnActive : {})
+                  }}
+                  onClick={() => setFilter("high")}
+                >
+                  🔥 Tinggi ({tasks.filter(t => t.priority === 'high').length})
+                </button>
+                <button 
+                  style={{
+                    ...styles.filterBtn,
+                    ...(filter === "medium" ? styles.filterBtnActive : {})
+                  }}
+                  onClick={() => setFilter("medium")}
+                >
+                  ⚡ Sedang ({tasks.filter(t => t.priority === 'medium').length})
+                </button>
+                <button 
+                  style={{
+                    ...styles.filterBtn,
+                    ...(filter === "low" ? styles.filterBtnActive : {})
+                  }}
+                  onClick={() => setFilter("low")}
+                >
+                  💤 Rendah ({tasks.filter(t => t.priority === 'low').length})
+                </button>
+                <button 
+                  style={{
+                    ...styles.filterBtn,
+                    ...(filter === "today" ? styles.filterBtnActive : {})
+                  }}
+                  onClick={() => setFilter("today")}
+                >
+                  📅 Hari Ini ({tasks.filter(t => {
+                    if (!t.deadline) return false;
+                    const today = new Date();
+                    const taskDate = new Date(t.deadline);
+                    return taskDate.toDateString() === today.toDateString();
+                  }).length})
+                </button>
+              </div>
+
+              <div style={styles.tasksList}>
+                {filteredTasks.map((task) => {
+                  const totalSub = task.subtasks ? task.subtasks.length : 0;
+                  const doneSub = task.completedSubtasks ? task.completedSubtasks.filter(c => c).length : 0;
+                  const progress = totalSub ? Math.round((doneSub / totalSub) * 100) : 0;
+
+                  const deadlineDate = task.deadline ? new Date(task.deadline) : null;
+                  const today = new Date();
+                  const isToday = deadlineDate && deadlineDate.toDateString() === today.toDateString();
+                  const isOverdue = deadlineDate && deadlineDate < today && !isToday;
+
+                  return (
+                    <div key={task._id} style={styles.taskItem}>
+                      <div style={styles.taskHeader}>
+                        <div style={styles.taskTitle}>{task.title}</div>
+                        <button 
+                          style={styles.deleteBtn}
+                          onClick={() => deleteTask(task._id)}
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                      <div style={styles.taskMeta}>
+                        <span style={{
+                          ...styles.priorityBadge,
+                          ...(task.priority === 'high' ? styles.priorityHigh : 
+                               task.priority === 'medium' ? styles.priorityMedium : 
+                               styles.priorityLow)
+                        }}>
+                          {task.priority === 'high' ? '🔥 TINGGI' : 
+                           task.priority === 'medium' ? '⚡ SEDANG' : '💤 RENDAH'}
+                        </span>
+                        {task.deadline && (
+                          <span style={{
+                            ...styles.deadline,
+                            ...(isOverdue ? styles.deadlineOverdue : 
+                                 isToday ? styles.deadlineToday : {})
+                          }}>
+                            {new Date(task.deadline).toLocaleDateString('id-ID', {
+                              weekday: 'short',
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        )}
+                      </div>
+                      {totalSub > 0 && (
+                        <>
+                          <div style={styles.taskProgress}>
+                            <div style={{...styles.progressBar, width: `${progress}%`}}></div>
+                          </div>
+                          <div style={styles.subtasks}>
+                            {task.subtasks.map((sub, i) => (
+                              <div key={i} style={styles.subtask}>
+                                <div 
+                                  style={{
+                                    ...styles.checkbox,
+                                    ...(task.completedSubtasks && task.completedSubtasks[i] ? styles.checkboxChecked : {})
+                                  }}
+                                  onClick={() => toggleSubtask(task._id, i)}
+                                >
+                                  {task.completedSubtasks && task.completedSubtasks[i] ? "✔" : ""}
+                                </div>
+                                <div style={{
+                                  ...styles.subtaskText,
+                                  ...(task.completedSubtasks && task.completedSubtasks[i] ? styles.subtaskTextCompleted : {})
+                                }}>
+                                  {sub}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                      {task.notes && (
+                        <div style={styles.taskNotes}>
+                          <div style={styles.notesTitle}>Catatan:</div>
+                          <div style={styles.notesContent}>{task.notes}</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {filteredTasks.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                    {tasks.length === 0 ? 'Belum ada tugas. Tambah tugas pertama Anda!' : `Tidak ada tugas dengan filter "${filter}".`}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Calendar */}
+          <div style={styles.rightColumn}>
+            <div style={styles.calendarCard}>
+              <h2 style={styles.sectionTitle}>
+                <span>📅</span> Kalender
+              </h2>
+              {renderCalendar()}
+            </div>
           </div>
         </div>
 
-        {/* Tasks Section */}
-        <div style={styles.tasksSection}>
-          <div style={styles.tasksContainer}>
-            <h2 style={styles.sectionTitle}>
-              <span>📋</span> Daftar Tugas
-            </h2>
-            <div style={styles.taskFilters}>
-              <button 
-                style={{
-                  ...styles.filterBtn,
-                  ...(filter === "all" ? styles.filterBtnActive : {})
-                }}
-                onClick={() => setFilter("all")}
-              >
-                📁 Semua ({tasks.length})
-              </button>
-              <button 
-                style={{
-                  ...styles.filterBtn,
-                  ...(filter === "high" ? styles.filterBtnActive : {})
-                }}
-                onClick={() => setFilter("high")}
-              >
-                🔥 Tinggi ({tasks.filter(t => t.priority === 'high').length})
-              </button>
-              <button 
-                style={{
-                  ...styles.filterBtn,
-                  ...(filter === "medium" ? styles.filterBtnActive : {})
-                }}
-                onClick={() => setFilter("medium")}
-              >
-                ⚡ Sedang ({tasks.filter(t => t.priority === 'medium').length})
-              </button>
-              <button 
-                style={{
-                  ...styles.filterBtn,
-                  ...(filter === "low" ? styles.filterBtnActive : {})
-                }}
-                onClick={() => setFilter("low")}
-              >
-                💤 Rendah ({tasks.filter(t => t.priority === 'low').length})
-              </button>
-              <button 
-                style={{
-                  ...styles.filterBtn,
-                  ...(filter === "today" ? styles.filterBtnActive : {})
-                }}
-                onClick={() => setFilter("today")}
-              >
-                📅 Hari Ini ({tasks.filter(t => {
-                  if (!t.deadline) return false;
-                  const today = new Date();
-                  const taskDate = new Date(t.deadline);
-                  return taskDate.toDateString() === today.toDateString();
-                }).length})
-              </button>
+        {/* Progress Container - Dibawah daftar tugas */}
+        <div style={styles.progressContainer}>
+          <h2 style={styles.sectionTitle}>
+            <span>📈</span> Kemajuan
+          </h2>
+          <div style={styles.progressOverview}>
+            <div style={{
+              ...styles.circularProgress,
+              background: `conic-gradient(#3b82f6 0deg, #3b82f6 ${Math.round((completedCount / Math.max(tasks.length, 1)) * 360)}deg, #e9ecef 0deg)`
+            }}>
+              <div style={styles.progressPercentage}>
+                {Math.round((completedCount / Math.max(tasks.length, 1)) * 100)}%
+              </div>
             </div>
-
-            <div style={styles.tasksList}>
-              {filteredTasks.map((task) => {
-                const totalSub = task.subtasks ? task.subtasks.length : 0;
-                const doneSub = task.completedSubtasks ? task.completedSubtasks.filter(c => c).length : 0;
-                const progress = totalSub ? Math.round((doneSub / totalSub) * 100) : 0;
-
-                const deadlineDate = task.deadline ? new Date(task.deadline) : null;
-                const today = new Date();
-                const isToday = deadlineDate && deadlineDate.toDateString() === today.toDateString();
-                const isOverdue = deadlineDate && deadlineDate < today && !isToday;
-
-                return (
-                  <div key={task._id} style={styles.taskItem}>
-                    <div style={styles.taskHeader}>
-                      <div style={styles.taskTitle}>{task.title}</div>
-                      <button 
-                        style={styles.deleteBtn}
-                        onClick={() => deleteTask(task._id)}
-                      >
-                        Hapus
-                      </button>
-                    </div>
-                    <div style={styles.taskMeta}>
-                      <span style={{
-                        ...styles.priorityBadge,
-                        ...(task.priority === 'high' ? styles.priorityHigh : 
-                             task.priority === 'medium' ? styles.priorityMedium : 
-                             styles.priorityLow)
-                      }}>
-                        {task.priority === 'high' ? '🔥 TINGGI' : 
-                         task.priority === 'medium' ? '⚡ SEDANG' : '💤 RENDAH'}
-                      </span>
-                      {task.deadline && (
-                        <span style={{
-                          ...styles.deadline,
-                          ...(isOverdue ? styles.deadlineOverdue : 
-                               isToday ? styles.deadlineToday : {})
-                        }}>
-                          {new Date(task.deadline).toLocaleDateString('id-ID', {
-                            weekday: 'short',
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </span>
-                      )}
-                    </div>
-                    {totalSub > 0 && (
-                      <>
-                        <div style={styles.taskProgress}>
-                          <div style={{...styles.progressBar, width: `${progress}%`}}></div>
-                        </div>
-                        <div style={styles.subtasks}>
-                          {task.subtasks.map((sub, i) => (
-                            <div key={i} style={styles.subtask}>
-                              <div 
-                                style={{
-                                  ...styles.checkbox,
-                                  ...(task.completedSubtasks && task.completedSubtasks[i] ? styles.checkboxChecked : {})
-                                }}
-                                onClick={() => toggleSubtask(task._id, i)}
-                              >
-                                {task.completedSubtasks && task.completedSubtasks[i] ? "✔" : ""}
-                              </div>
-                              <div style={{
-                                ...styles.subtaskText,
-                                ...(task.completedSubtasks && task.completedSubtasks[i] ? styles.subtaskTextCompleted : {})
-                              }}>
-                                {sub}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                    {task.notes && (
-                      <div style={styles.taskNotes}>
-                        <div style={styles.notesTitle}>Catatan:</div>
-                        <div style={styles.notesContent}>{task.notes}</div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {filteredTasks.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
-                  {tasks.length === 0 ? 'Belum ada tugas. Tambah tugas pertama Anda!' : `Tidak ada tugas dengan filter "${filter}".`}
-                </div>
-              )}
+            <div style={styles.progressStats}>
+              <div style={styles.progressStat}>
+                <div style={styles.progressStatNumber}>{Math.round(completedCount)}</div>
+                <div style={styles.progressStatLabel}>Selesai</div>
+              </div>
+              <div style={styles.progressStat}>
+                <div style={styles.progressStatNumber}>{tasks.length}</div>
+                <div style={styles.progressStatLabel}>Total</div>
+              </div>
             </div>
           </div>
 
-          {/* Progress Container */}
-          <div style={styles.progressContainer}>
-            <h2 style={styles.sectionTitle}>
-              <span>📈</span> Kemajuan
-            </h2>
-            <div style={styles.progressOverview}>
-              <div style={{
-                ...styles.circularProgress,
-                background: `conic-gradient(#3b82f6 0deg, #3b82f6 ${Math.round((completedCount / Math.max(tasks.length, 1)) * 360)}deg, #e9ecef 0deg)`
-              }}>
-                <div style={styles.progressPercentage}>
-                  {Math.round((completedCount / Math.max(tasks.length, 1)) * 100)}%
-                </div>
-              </div>
-              <div style={styles.progressStats}>
-                <div style={styles.progressStat}>
-                  <div style={styles.progressStatNumber}>{Math.round(completedCount)}</div>
-                  <div style={styles.progressStatLabel}>Selesai</div>
-                </div>
-                <div style={styles.progressStat}>
-                  <div style={styles.progressStatNumber}>{tasks.length}</div>
-                  <div style={styles.progressStatLabel}>Total</div>
-                </div>
+          {/* Priority Summary */}
+          <div style={styles.notifications}>
+            <h3 style={{ color: "#333", marginBottom: "1rem" }}>📊 Ringkasan Prioritas</h3>
+            <div style={styles.notificationItem}>
+              <div style={styles.notificationIcon}>🔥</div>
+              <div style={styles.notificationContent}>
+                <div style={styles.notificationTitle}>Prioritas Tinggi</div>
+                <div style={styles.notificationTime}>{tasks.filter(t => t.priority === 'high').length} tugas</div>
               </div>
             </div>
-
-            {/* Priority Summary */}
-            <div style={styles.notifications}>
-              <h3 style={{ color: "#333", marginBottom: "1rem" }}>📊 Ringkasan Prioritas</h3>
-              <div style={styles.notificationItem}>
-                <div style={styles.notificationIcon}>🔥</div>
-                <div style={styles.notificationContent}>
-                  <div style={styles.notificationTitle}>Prioritas Tinggi</div>
-                  <div style={styles.notificationTime}>{tasks.filter(t => t.priority === 'high').length} tugas</div>
-                </div>
+            <div style={styles.notificationItem}>
+              <div style={styles.notificationIcon}>⚡</div>
+              <div style={styles.notificationContent}>
+                <div style={styles.notificationTitle}>Prioritas Sedang</div>
+                <div style={styles.notificationTime}>{tasks.filter(t => t.priority === 'medium').length} tugas</div>
               </div>
-              <div style={styles.notificationItem}>
-                <div style={styles.notificationIcon}>⚡</div>
-                <div style={styles.notificationContent}>
-                  <div style={styles.notificationTitle}>Prioritas Sedang</div>
-                  <div style={styles.notificationTime}>{tasks.filter(t => t.priority === 'medium').length} tugas</div>
-                </div>
-              </div>
-              <div style={styles.notificationItem}>
-                <div style={styles.notificationIcon}>💤</div>
-                <div style={styles.notificationContent}>
-                  <div style={styles.notificationTitle}>Prioritas Rendah</div>
-                  <div style={styles.notificationTime}>{tasks.filter(t => t.priority === 'low').length} tugas</div>
-                </div>
+            </div>
+            <div style={styles.notificationItem}>
+              <div style={styles.notificationIcon}>💤</div>
+              <div style={styles.notificationContent}>
+                <div style={styles.notificationTitle}>Prioritas Rendah</div>
+                <div style={styles.notificationTime}>{tasks.filter(t => t.priority === 'low').length} tugas</div>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Modal */}
-      {isModalOpen && (
-        <div style={styles.modal}>
-          <div style={styles.modalContent}>
-            <div style={styles.modalHeader}>
-              <div style={styles.modalTitle}>Tambah Tugas Baru</div>
-              <button style={styles.closeBtn} onClick={closeModal}>&times;</button>
-            </div>
-            <form onSubmit={handleAddTask}>
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Judul Tugas *</label>
-                <input 
-                  type="text" 
-                  name="taskTitle" 
-                  style={styles.formInput} 
-                  required 
-                  placeholder="Masukkan judul tugas"
-                />
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Prioritas *</label>
-                <select name="taskPriority" style={styles.formSelect}>
-                  <option value="high">🔥 Tinggi</option>
-                  <option value="medium">⚡ Sedang</option>
-                  <option value="low">💤 Rendah</option>
-                </select>
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Deadline</label>
-                <input 
-                  type="datetime-local" 
-                  name="taskDeadline" 
-                  style={styles.formInput} 
-                />
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Catatan</label>
-                <textarea 
-                  name="taskNotes" 
-                  style={styles.formTextarea}
-                  placeholder="Tambahkan catatan untuk tugas ini..."
-                ></textarea>
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Sub-tugas (satu per baris)</label>
-                <textarea 
-                  name="taskSubtasks" 
-                  style={styles.formTextarea}
-                  placeholder="Tulis sub-tugas, satu per baris..."
-                ></textarea>
-              </div>
-              <button type="submit" style={styles.submitBtn}>
-                Tambahkan Tugas
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
