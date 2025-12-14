@@ -1,47 +1,46 @@
 // tes-grafana.js
 // GANTI DENGAN DATA ASLI DARI .ENV.LOCAL KAMU
-const USER = '1423284'; // Isi LOKI_USER
-require('dotenv').config();
-const PASS = process.env.GRAFANA_TOKEN;
-const HOST = 'https://logs-prod-032.grafana.net'; // Isi LOKI_HOST
+const USER = process.env.LOKI_USER || '1423284'; 
+const PASS = process.env.GRAFANA_TOKEN; // Pastikan token ada di .env.local
+const HOST = process.env.LOKI_HOST || 'https://logs-prod-032.grafana.net';
 
-console.log("DEBUG CHECK:");
-console.log("User ID:", USER);
-console.log("Token terbaca:", PASS ? "ADA (Panjang: " + PASS.length + ")" : "KOSONG/UNDEFINED");
+// Fungsi ini yang akan dipanggil oleh Middleware
+export async function kirimLog(pesan, labelData = {}) {
+  // Cek token dulu
+  if (!PASS) return;
 
-const auth = Buffer.from(`${USER}:${PASS}`).toString('base64');
+  // 1. Buat Auth Header (Pakai btoa agar aman di Next.js)
+  const auth = 'Basic ' + btoa(`${USER}:${PASS}`);
 
-async function kirimLog() {
-  console.log("📨 Sedang mencoba kirim pesan ke Grafana...");
-  
+  // 2. Siapkan Label
+  const streamLabels = { 
+      app: 'todolist-uas', 
+      level: 'info',
+      ...labelData 
+  };
+
+  // 3. Kirim ke Grafana
   try {
-    const response = await fetch(`${HOST}/loki/api/v1/push`, {
+    // Gunakan fetch tanpa await (Fire & Forget) supaya aplikasi tidak lemot
+    fetch(`${HOST}/loki/api/v1/push`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Basic ${auth}`
+        'Authorization': auth
       },
       body: JSON.stringify({
         streams: [
           {
-            stream: { app: 'todolist-uas', level: 'info' },
+            stream: streamLabels,
             values: [
-              [String(Date.now() * 1000000), "TES MANUAL DARI SCRIPT NODE JS!"]
+              [String(Date.now() * 1000000), pesan]
             ]
           }
         ]
       })
-    });
+    }).catch(err => console.log("Gagal lapor Grafana:", err.message));
 
-    if (response.status === 204) {
-      console.log("✅ SUKSES! Pesan terkirim. Cek Grafana sekarang.");
-    } else {
-      console.log("❌ GAGAL! Status:", response.status);
-      console.log("Pesan Error:", await response.text());
-    }
   } catch (error) {
-    console.log("🔥 ERROR KONEKSI:", error);
+    console.log("Error System Log:", error);
   }
 }
-
-kirimLog();
