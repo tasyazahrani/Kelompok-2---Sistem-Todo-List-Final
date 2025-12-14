@@ -136,8 +136,4 @@ docker run -p 3000:3000 --env-file .env todo-app-klp2
 
 -----
 
-\<div align="center"\>
-\<small\>Copyright © 2024 Kelompok 2 - UAS POPL. Dibuat dengan ❤️ dan kopi.\</small\>
-\</div\>
-
-````
+<div align="center"> <small>Copyright © 2024 Kelompok 2 - UAS POPL.</small> </div>
