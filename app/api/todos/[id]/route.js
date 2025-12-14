@@ -1,5 +1,5 @@
-import { connectDB } from "@/lib/mongodb";
-import Todo from "@/models/Todo";
+import { connectDB } from "../../../lib/mongodb"; // Naik 3 langkah
+import Todo from "../../../models/Todo";
 
 export async function PUT(req, { params }) {
   await connectDB();
