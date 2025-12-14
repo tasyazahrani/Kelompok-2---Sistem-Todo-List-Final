@@ -13,7 +13,7 @@
   Diajukan untuk memenuhi Tugas Akhir Mata Kuliah Pemrograman Berorientasi Objek / Platform (POPL).
 </p>
 
-[🌐 Live Demo](https://kelompok-2-sistem-todo-list-final-hlv3-g7mb9y6lx.vercel.app) • [📂 Repository](https://github.com/tasyazahrani/Kelompok-2---Sistem-Todo-List-Final) • [🐞 Report Bug](https://github.com/tasyazahrani/Kelompok-2---Sistem-Todo-List-Final/issues)
+[🌐 Live Demo](https://kelompok-2-sistem-todo-list-final-h.vercel.app) • [📂 Repository](https://github.com/tasyazahrani/Kelompok-2---Sistem-Todo-List-Final) • [🐞 Report Bug](https://github.com/tasyazahrani/Kelompok-2---Sistem-Todo-List-Final/issues)
 
 </div>
 
